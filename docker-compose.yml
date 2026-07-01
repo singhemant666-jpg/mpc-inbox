@@ -1,0 +1,48 @@
+services:
+  # ---- PostgreSQL Database ----
+  db:
+    image: postgres:16-alpine
+    container_name: mpc-inbox-postgres
+    environment:
+      POSTGRES_USER: inbox_user
+      POSTGRES_PASSWORD: inbox_password
+      POSTGRES_DB: mpc_inbox
+    ports:
+      - "5433:5432"
+    volumes:
+      - inbox_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inbox_user -d mpc_inbox"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - inbox-network
+
+  # ---- Redis Cache ----
+  redis:
+    image: redis:7-alpine
+    container_name: mpc-inbox-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - inbox_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - inbox-network
+
+volumes:
+  inbox_postgres_data:
+    driver: local
+  inbox_redis_data:
+    driver: local
+
+networks:
+  inbox-network:
+    driver: bridge
