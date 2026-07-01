@@ -278,7 +278,7 @@ export default function InboxPage() {
   };
 
   return (
-    <div className="h-screen w-screen flex bg-wa-dark-bg text-gray-200 overflow-hidden font-sans select-none">
+    <div className="h-screen w-screen flex bg-wa-dark-bg text-gray-200 overflow-hidden font-sans">
       {/* ---- Sidebar & Chat Window Container ---- */}
       <div className="flex flex-1 h-full overflow-hidden">
         {/* Sidebar — conversation list */}

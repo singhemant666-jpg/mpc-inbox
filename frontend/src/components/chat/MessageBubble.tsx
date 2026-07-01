@@ -88,22 +88,47 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     }
   };
 
+  // Helper to parse URLs and render them as clickable anchor links
+  const renderMessageContent = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, index) => {
+      const isUrl = /^https?:\/\//i.test(part) || /^www\./i.test(part);
+      if (isUrl) {
+        const href = part.startsWith('http') ? part : `https://${part}`;
+        return (
+          <a
+            key={index}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-sky-400 hover:text-sky-300 break-all cursor-pointer select-text"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index} className="select-text">{part}</span>;
+    });
+  };
+
   return (
     <div
       className={`flex ${isAgent ? 'justify-end' : 'justify-start'} mb-1.5 animate-slide-in-up`}
     >
       <div
-        className={`max-w-[75%] md:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm
+        className={`max-w-[75%] md:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm select-text
           ${isAgent ? 'bg-[#005C4B] rounded-tr-none text-white' : 'bg-[#202C33] rounded-tl-none text-white'}
         `}
       >
         {/* Message text */}
-        <p className="text-[14px] text-gray-100 leading-relaxed whitespace-pre-wrap break-words">
-          {message.message}
+        <p className="text-[14px] text-gray-100 leading-relaxed whitespace-pre-wrap break-words select-text">
+          {renderMessageContent(message.message)}
         </p>
 
         {/* Timestamp + Status */}
-        <div className="flex items-center justify-end gap-0.5 mt-1 -mb-0.5">
+        <div className="flex items-center justify-end gap-0.5 mt-1 -mb-0.5 select-none">
           <span className="text-[10px] text-gray-400">{time}</span>
           {isAgent && getStatusIcon()}
         </div>
