@@ -20,5 +20,10 @@
     "paths": {
       "@/*": ["src/*"]
     }
-  }
+  },
+  "exclude": [
+    "prisma/migrate-sqlite-to-postgres.ts",
+    "prisma/classify-existing.ts",
+    "src/generated"
+  ]
 }

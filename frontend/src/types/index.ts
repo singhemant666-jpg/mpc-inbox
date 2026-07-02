@@ -6,6 +6,8 @@ export interface Conversation {
   id: string;
   patientName: string;
   phoneNumber: string;
+  conversationType: 'new_lead' | 'existing_patient';
+  assignedUserId: string | null;
   lastMessage: string | null;
   lastMessageSender?: 'patient' | 'agent' | null;
   lastMessageTime: string | null;
@@ -76,6 +78,8 @@ export interface ConversationUpdatedEvent {
   lastMessageSender?: 'patient' | 'agent' | null;
   lastMessageTime: string;
   unreadCount: number;
+  conversationType?: 'new_lead' | 'existing_patient';
+  assignedUserId?: string | null;
 }
 
 export interface MessageStatusEvent {

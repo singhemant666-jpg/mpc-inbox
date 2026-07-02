@@ -9,17 +9,20 @@ datasource db {
 
 /// Patient conversation thread — one per unique phone number
 model Conversation {
-  id              String    @id @default(cuid())
-  patientName     String    @map("patient_name")
-  phoneNumber     String    @unique @map("phone_number")
-  lastMessage     String?   @map("last_message")
-  lastMessageSender String?  @map("last_message_sender") // "patient" | "agent"
-  lastMessageTime DateTime? @map("last_message_time")
-  unreadCount     Int       @default(0) @map("unread_count")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id                String    @id @default(cuid())
+  patientName       String    @map("patient_name")
+  phoneNumber       String    @unique @map("phone_number")
+  conversationType  String    @default("existing_patient") @map("conversation_type") // "new_lead" | "existing_patient"
+  assignedUserId    String?   @map("assigned_user_id")
+  lastMessage       String?   @map("last_message")
+  lastMessageSender String?   @map("last_message_sender") // "patient" | "agent"
+  lastMessageTime   DateTime? @map("last_message_time")
+  unreadCount       Int       @default(0) @map("unread_count")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  messages Message[]
+  messages     Message[]
+  assignedUser User?    @relation(fields: [assignedUserId], references: [id])
 
   @@map("inbox_conversations")
 }
@@ -48,6 +51,8 @@ model User {
   password  String
   role      String   @default("agent")
   createdAt DateTime @default(now()) @map("created_at")
+
+  assignedConversations Conversation[]
 
   @@map("inbox_users")
 }

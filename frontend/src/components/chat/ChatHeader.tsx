@@ -7,6 +7,8 @@ interface ChatHeaderProps {
   conversation: Conversation;
   onBack: () => void;
   onSearchClick?: () => void;
+  onConvert?: () => void;
+  onTransferToLeads?: () => void;
 }
 
 const AVATAR_COLORS = [
@@ -28,7 +30,7 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-export function ChatHeader({ conversation, onBack, onSearchClick }: ChatHeaderProps) {
+export function ChatHeader({ conversation, onBack, onSearchClick, onConvert, onTransferToLeads }: ChatHeaderProps) {
   const initials = getInitials(conversation.patientName);
   const avatarColor = getAvatarColor(conversation.patientName);
 
@@ -88,6 +90,58 @@ export function ChatHeader({ conversation, onBack, onSearchClick }: ChatHeaderPr
 
       {/* Right Side Header Controls */}
       <div className="flex items-center gap-4 text-[#AEBAC1]">
+        {/* Convert Button (Only show if this is a new lead) */}
+        {conversation.conversationType === 'new_lead' && onConvert && (
+          <button
+            onClick={onConvert}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#00A884] text-[#111B21] hover:bg-[#008F72] transition-smooth select-none mr-1"
+            title="Send this lead to Admin inbox"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <polyline points="16 11 18 13 22 9" />
+            </svg>
+            Send to Admin
+          </button>
+        )}
+
+        {/* Transfer back to Leads Button (Only show if this is an existing patient) */}
+        {conversation.conversationType === 'existing_patient' && onTransferToLeads && (
+          <button
+            onClick={onTransferToLeads}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#00A884] text-[#111B21] hover:bg-[#008F72] transition-smooth select-none mr-1"
+            title="Move this conversation to Leads inbox"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M17 10H3M3 10L7 6M3 10L7 14" />
+              <path d="M21 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Move to Leads
+          </button>
+        )}
+
         {/* Search Icon */}
         <button
           onClick={onSearchClick}

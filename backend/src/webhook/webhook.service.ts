@@ -2,12 +2,43 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../gateway/events.gateway';
 
+// Phrases that indicate a new lead (first message from patient)
+const NEW_LEAD_PHRASES = [
+  'Hello! Can I get more info on this?',
+  "Hi, I'd like to book a consultation.",
+  '[button_reply]',
+];
+
+function isNewLead(messageText: string): boolean {
+  const normalized = messageText.trim().toLowerCase();
+  return NEW_LEAD_PHRASES.some(
+    (phrase) => normalized === phrase.toLowerCase(),
+  );
+}
+
 @Injectable()
 export class WebhookService {
   constructor(
     private prisma: PrismaService,
     private eventsGateway: EventsGateway,
   ) {}
+
+  /**
+   * Look up the user ID to assign a conversation to, based on its type.
+   * - "new_lead" → leads@mypainclnic.com
+   * - "existing_patient" → admin@mypainclnic.com
+   */
+  private async getAssignedUserId(
+    conversationType: string,
+  ): Promise<string | null> {
+    const email =
+      conversationType === 'new_lead'
+        ? 'leads@mypainclnic.com'
+        : 'admin@mypainclnic.com';
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    return user?.id || null;
+  }
 
   /**
    * Handle an incoming patient message from Gupshup webhook.
@@ -77,17 +108,27 @@ export class WebhookService {
     });
 
     if (!conversation) {
+      // This is the FIRST message from this phone number → classify it
+      const conversationType = isNewLead(messageText)
+        ? 'new_lead'
+        : 'existing_patient';
+      const assignedUserId = await this.getAssignedUserId(conversationType);
+
       conversation = await this.prisma.conversation.create({
         data: {
           patientName: senderName,
           phoneNumber,
+          conversationType,
+          assignedUserId,
           lastMessage: messageText,
           lastMessageSender: 'patient',
           lastMessageTime: new Date(),
           unreadCount: 1,
         },
       });
-      console.log(`✨ New conversation created for ${senderName}`);
+      console.log(
+        `✨ New conversation created for ${senderName} [${conversationType}] → assigned to ${assignedUserId || 'unassigned'}`,
+      );
     } else {
       // Update patient name if Gupshup provides a better one
       const updateData: any = {
@@ -142,6 +183,8 @@ export class WebhookService {
       lastMessageSender: 'patient',
       lastMessageTime: conversation.lastMessageTime,
       unreadCount: conversation.unreadCount,
+      conversationType: conversation.conversationType,
+      assignedUserId: conversation.assignedUserId,
     });
 
     return message;

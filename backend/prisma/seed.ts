@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Create admin user
+  // Create admin user (sees existing patient conversations)
   const hashedPassword = await bcrypt.hash(
     process.env.ADMIN_PASSWORD || 'admin123',
     12,
@@ -24,6 +24,22 @@ async function main() {
   });
 
   console.log(`✅ Admin user created: ${admin.email}`);
+
+  // Create leads user (sees new lead conversations)
+  const leadsHashedPassword = await bcrypt.hash('leads123', 12);
+
+  const leadsUser = await prisma.user.upsert({
+    where: { email: 'leads@mypainclnic.com' },
+    update: {},
+    create: {
+      name: 'Leads Manager',
+      email: 'leads@mypainclnic.com',
+      password: leadsHashedPassword,
+      role: 'agent',
+    },
+  });
+
+  console.log(`✅ Leads user created: ${leadsUser.email}`);
 
   // Delete the mock demo conversations if they exist
   const deleteResult = await prisma.conversation.deleteMany({

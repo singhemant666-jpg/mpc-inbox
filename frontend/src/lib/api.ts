@@ -13,6 +13,9 @@ const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
   },
 });
 
@@ -109,6 +112,16 @@ export async function sendMessage(conversationId: string, message: string) {
     conversationId,
     message,
   });
+  return data;
+}
+
+export async function convertConversationToPatient(conversationId: string): Promise<any> {
+  const { data } = await api.post(`/conversations/${conversationId}/convert`);
+  return data;
+}
+
+export async function transferConversationToLeads(conversationId: string): Promise<any> {
+  const { data } = await api.post(`/conversations/${conversationId}/transfer-to-leads`);
   return data;
 }
 

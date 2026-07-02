@@ -6,6 +6,7 @@ import {
   Query,
   UseGuards,
   Param,
+  Req,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -17,15 +18,17 @@ export class ConversationsController {
 
   /**
    * GET /api/conversations
-   * List all conversations with optional search and pagination
+   * List all conversations assigned to the logged-in user
    */
   @Get()
   async findAll(
+    @Req() req: any,
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.conversationsService.findAll({
+      userId: req.user.sub,
       search,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 50,
@@ -34,11 +37,11 @@ export class ConversationsController {
 
   /**
    * GET /api/conversations/unread-count
-   * Get total unread message count
+   * Get total unread message count for the logged-in user
    */
   @Get('unread-count')
-  async getUnreadCount() {
-    return this.conversationsService.getTotalUnreadCount();
+  async getUnreadCount(@Req() req: any) {
+    return this.conversationsService.getTotalUnreadCount(req.user.sub);
   }
 
   /**
@@ -57,5 +60,23 @@ export class ConversationsController {
   @Post('read')
   async markAsRead(@Body('conversationId') conversationId: string) {
     return this.conversationsService.markAsRead(conversationId);
+  }
+
+  /**
+   * POST /api/conversations/:id/convert
+   * Convert a lead conversation to an existing patient conversation
+   */
+  @Post(':id/convert')
+  async convertToPatient(@Param('id') id: string) {
+    return this.conversationsService.convertToPatient(id);
+  }
+
+  /**
+   * POST /api/conversations/:id/transfer-to-leads
+   * Transfer a conversation back to the leads account
+   */
+  @Post(':id/transfer-to-leads')
+  async transferToLeads(@Param('id') id: string) {
+    return this.conversationsService.transferToLeads(id);
   }
 }

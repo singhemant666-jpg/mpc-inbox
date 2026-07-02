@@ -8,6 +8,8 @@ import {
   sendMessage,
   markAsRead,
   getTotalUnreadCount,
+  convertConversationToPatient,
+  transferConversationToLeads,
 } from '@/lib/api';
 import { getSocket, connectSocket, disconnectSocket } from '@/lib/socket';
 import type {
@@ -39,6 +41,12 @@ export default function InboxPage() {
   const [totalUnread, setTotalUnread] = useState(0);
   const [isMobileShowChat, setIsMobileShowChat] = useState(false);
   const selectedConvRef = useRef<string | null>(null);
+  const userRef = useRef<User | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
+
+  // Keep refs in sync with state
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
   // ---- Auth check ----
   useEffect(() => {
@@ -146,6 +154,52 @@ export default function InboxPage() {
     [selectedConversation],
   );
 
+  // ---- Convert Lead to Patient ----
+  const handleConvertConversation = useCallback(async () => {
+    if (!selectedConversation) return;
+    try {
+      await convertConversationToPatient(selectedConversation.id);
+      
+      // Instantly clear local UI states so we don't display stale data
+      setSelectedConversation(null);
+      selectedConvRef.current = null;
+      setIsMobileShowChat(false);
+      setMessages([]);
+      setConversations((prev) =>
+        prev.filter((c) => c.id !== selectedConversation.id),
+      );
+      setTotalUnread((prev) =>
+        Math.max(0, prev - selectedConversation.unreadCount),
+      );
+    } catch (err) {
+      console.error('Failed to convert conversation:', err);
+    }
+  }, [selectedConversation]);
+
+  // ---- Transfer Patient back to Leads ----
+  const handleTransferToLeads = useCallback(async () => {
+    if (!selectedConversation) return;
+    try {
+      await transferConversationToLeads(selectedConversation.id);
+      
+      // Instantly clear local UI states so we don't display stale data
+      setSelectedConversation(null);
+      selectedConvRef.current = null;
+      setIsMobileShowChat(false);
+      setMessages([]);
+      setConversations((prev) =>
+        prev.filter((c) => c.id !== selectedConversation.id),
+      );
+      setTotalUnread((prev) =>
+        Math.max(0, prev - selectedConversation.unreadCount),
+      );
+    } catch (err) {
+      console.error('Failed to transfer conversation to leads:', err);
+    }
+  }, [selectedConversation]);
+
+
+
   // ---- Socket.IO real-time events ----
   useEffect(() => {
     connectSocket();
@@ -168,7 +222,11 @@ export default function InboxPage() {
         }
       } else {
         // Play notification sound and show browser notification
-        if (message.senderType === 'patient') {
+        // Only if this conversation belongs to the current user
+        const belongsToUser = conversationsRef.current.some(
+          (c) => c.id === conversationId,
+        );
+        if (message.senderType === 'patient' && belongsToUser) {
           playNotificationSound();
           showBrowserNotification(message);
         }
@@ -178,6 +236,11 @@ export default function InboxPage() {
     socket.on(
       'conversation_updated',
       (event: ConversationUpdatedEvent) => {
+        // Only process events for conversations assigned to the current user
+        const currentUserId = userRef.current?.id;
+        const isAssignedToMe =
+          event.assignedUserId === currentUserId;
+
         setConversations((prev) => {
           const exists = prev.some((c) => c.id === event.id);
           let nextList = [];
@@ -204,9 +267,11 @@ export default function InboxPage() {
                 new Date(b.lastMessageTime || 0).getTime() -
                 new Date(a.lastMessageTime || 0).getTime(),
             );
-          } else {
-            // New conversation — add to top
+          } else if (isAssignedToMe) {
+            // New conversation assigned to me — add to top
             nextList = [event as any, ...prev];
+          } else {
+            nextList = prev;
           }
 
           // Calculate total unread count on the new list immediately
@@ -232,7 +297,7 @@ export default function InboxPage() {
       socket.off('message_status');
       disconnectSocket();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Notification helpers ----
   const playNotificationSound = () => {
@@ -333,6 +398,8 @@ export default function InboxPage() {
             sending={sendingMessage}
             onSend={handleSendMessage}
             onBack={handleMobileBack}
+            onConvert={handleConvertConversation}
+            onTransferToLeads={handleTransferToLeads}
           />
         </div>
       </div>
