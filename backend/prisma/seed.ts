@@ -26,14 +26,17 @@ async function main() {
   console.log(`✅ Admin user created: ${admin.email}`);
 
   // Create leads user (sees new lead conversations)
-  const leadsHashedPassword = await bcrypt.hash('leads123', 12);
+  const leadsHashedPassword = await bcrypt.hash(
+    process.env.LEADS_PASSWORD || 'leads123',
+    12,
+  );
 
   const leadsUser = await prisma.user.upsert({
-    where: { email: 'leads@mypainclnic.com' },
+    where: { email: process.env.LEADS_EMAIL || 'leads@mypainclnic.com' },
     update: {},
     create: {
-      name: 'Leads Manager',
-      email: 'leads@mypainclnic.com',
+      name: process.env.LEADS_NAME || 'Leads Manager',
+      email: process.env.LEADS_EMAIL || 'leads@mypainclnic.com',
       password: leadsHashedPassword,
       role: 'agent',
     },

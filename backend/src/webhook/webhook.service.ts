@@ -33,8 +33,8 @@ export class WebhookService {
   ): Promise<string | null> {
     const email =
       conversationType === 'new_lead'
-        ? 'leads@mypainclnic.com'
-        : 'admin@mypainclnic.com';
+        ? process.env.LEADS_EMAIL || 'leads@mypainclnic.com'
+        : process.env.ADMIN_EMAIL || 'admin@mypainclnic.com';
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     return user?.id || null;

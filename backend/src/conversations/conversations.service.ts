@@ -100,7 +100,7 @@ export class ConversationsService {
     }
 
     const adminUser = await this.prisma.user.findUnique({
-      where: { email: 'admin@mypainclnic.com' },
+      where: { email: process.env.ADMIN_EMAIL || 'admin@mypainclnic.com' },
     });
 
     if (!adminUser) {
@@ -147,7 +147,7 @@ export class ConversationsService {
     }
 
     const leadsUser = await this.prisma.user.findUnique({
-      where: { email: 'leads@mypainclnic.com' },
+      where: { email: process.env.LEADS_EMAIL || 'leads@mypainclnic.com' },
     });
 
     if (!leadsUser) {
