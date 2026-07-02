@@ -5,9 +5,10 @@ import { formatMessageTime } from '@/lib/utils';
 
 interface MessageBubbleProps {
   message: Message;
+  isHighlighted?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
   const isAgent = message.senderType === 'agent';
   const time = formatMessageTime(message.createdAt);
 
@@ -115,11 +116,18 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div
+      id={`msg-${message.id}`}
       className={`flex ${isAgent ? 'justify-end' : 'justify-start'} mb-1.5 animate-slide-in-up`}
     >
       <div
-        className={`max-w-[75%] md:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm select-text
-          ${isAgent ? 'bg-[#005C4B] rounded-tr-none text-white' : 'bg-[#202C33] rounded-tl-none text-white'}
+        className={`max-w-[75%] md:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm select-text transition-all duration-500
+          ${
+            isHighlighted
+              ? 'ring-2 ring-[#00A884] bg-[#007F63]/90 shadow-emerald-950/60 shadow-lg scale-[1.02]'
+              : isAgent
+              ? 'bg-[#005C4B] rounded-tr-none text-white'
+              : 'bg-[#202C33] rounded-tl-none text-white'
+          }
         `}
       >
         {/* Message text */}

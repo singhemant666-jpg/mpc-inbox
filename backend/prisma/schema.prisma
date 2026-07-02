@@ -13,6 +13,7 @@ model Conversation {
   patientName     String    @map("patient_name")
   phoneNumber     String    @unique @map("phone_number")
   lastMessage     String?   @map("last_message")
+  lastMessageSender String?  @map("last_message_sender") // "patient" | "agent"
   lastMessageTime DateTime? @map("last_message_time")
   unreadCount     Int       @default(0) @map("unread_count")
   createdAt       DateTime  @default(now()) @map("created_at")

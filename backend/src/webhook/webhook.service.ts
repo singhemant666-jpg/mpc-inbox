@@ -82,6 +82,7 @@ export class WebhookService {
           patientName: senderName,
           phoneNumber,
           lastMessage: messageText,
+          lastMessageSender: 'patient',
           lastMessageTime: new Date(),
           unreadCount: 1,
         },
@@ -91,6 +92,7 @@ export class WebhookService {
       // Update patient name if Gupshup provides a better one
       const updateData: any = {
         lastMessage: messageText,
+        lastMessageSender: 'patient',
         lastMessageTime: new Date(),
         unreadCount: { increment: 1 },
       };
@@ -137,6 +139,7 @@ export class WebhookService {
       patientName: conversation.patientName,
       phoneNumber: conversation.phoneNumber,
       lastMessage: messageText,
+      lastMessageSender: 'patient',
       lastMessageTime: conversation.lastMessageTime,
       unreadCount: conversation.unreadCount,
     });

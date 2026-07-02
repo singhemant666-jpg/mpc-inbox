@@ -102,6 +102,7 @@ export class MessagesService {
       where: { id: conversationId },
       data: {
         lastMessage: text.trim(),
+        lastMessageSender: 'agent',
         lastMessageTime: new Date(),
       },
     });
@@ -122,6 +123,7 @@ export class MessagesService {
       patientName: updatedConversation.patientName,
       phoneNumber: updatedConversation.phoneNumber,
       lastMessage: text.trim(),
+      lastMessageSender: 'agent',
       lastMessageTime: updatedConversation.lastMessageTime,
       unreadCount: updatedConversation.unreadCount,
     });

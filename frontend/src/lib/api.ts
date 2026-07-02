@@ -123,6 +123,11 @@ export async function createTemplate(title: string, text: string): Promise<Templ
   return data;
 }
 
+export async function updateTemplate(id: string, title: string, text: string): Promise<Template> {
+  const { data } = await api.patch<Template>(`/templates/${id}`, { title, text });
+  return data;
+}
+
 export async function deleteTemplate(id: string): Promise<any> {
   const { data } = await api.delete(`/templates/${id}`);
   return data;

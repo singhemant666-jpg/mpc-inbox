@@ -7,6 +7,7 @@ export interface Conversation {
   patientName: string;
   phoneNumber: string;
   lastMessage: string | null;
+  lastMessageSender?: 'patient' | 'agent' | null;
   lastMessageTime: string | null;
   unreadCount: number;
   createdAt: string;
@@ -72,6 +73,7 @@ export interface ConversationUpdatedEvent {
   patientName: string;
   phoneNumber: string;
   lastMessage: string;
+  lastMessageSender?: 'patient' | 'agent' | null;
   lastMessageTime: string;
   unreadCount: number;
 }

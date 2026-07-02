@@ -78,8 +78,8 @@ export function ConversationItem({
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 min-w-0">
-            {/* Show double ticks if it is read (unreadCount is 0) to simulate agent sent status */}
-            {!hasUnread && conversation.lastMessage && (
+            {/* Show double ticks ONLY if the last message was sent by the agent */}
+            {conversation.lastMessageSender === 'agent' && conversation.lastMessage && (
               <span className="text-[#53bdeb] shrink-0">
                 <svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor">
                   <path d="M11.071.653a.457.457 0 0 0-.304-.102.493.493 0 0 0-.381.178l-6.19 7.636-2.011-2.095a.463.463 0 0 0-.336-.153.457.457 0 0 0-.336.153.462.462 0 0 0 0 .653l2.357 2.453a.454.454 0 0 0 .336.153.511.511 0 0 0 .381-.178l6.484-8.043a.397.397 0 0 0 0-.655z"/>

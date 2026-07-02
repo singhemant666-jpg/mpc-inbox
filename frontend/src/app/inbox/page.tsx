@@ -180,12 +180,15 @@ export default function InboxPage() {
       (event: ConversationUpdatedEvent) => {
         setConversations((prev) => {
           const exists = prev.some((c) => c.id === event.id);
+          let nextList = [];
+          
           if (exists) {
             const updated = prev.map((c) =>
               c.id === event.id
                 ? {
                     ...c,
                     lastMessage: event.lastMessage,
+                    lastMessageSender: event.lastMessageSender,
                     lastMessageTime: event.lastMessageTime,
                     unreadCount:
                       selectedConvRef.current === event.id
@@ -196,22 +199,21 @@ export default function InboxPage() {
                 : c,
             );
             // Re-sort by last message time
-            return updated.sort(
+            nextList = updated.sort(
               (a, b) =>
                 new Date(b.lastMessageTime || 0).getTime() -
                 new Date(a.lastMessageTime || 0).getTime(),
             );
           } else {
             // New conversation — add to top
-            return [event as any, ...prev];
+            nextList = [event as any, ...prev];
           }
-        });
 
-        // Update total unread
-        setConversations((prev) => {
-          const unread = prev.reduce((sum, c) => sum + c.unreadCount, 0);
+          // Calculate total unread count on the new list immediately
+          const unread = nextList.reduce((sum, c) => sum + c.unreadCount, 0);
           setTotalUnread(unread);
-          return prev;
+
+          return nextList;
         });
       },
     );

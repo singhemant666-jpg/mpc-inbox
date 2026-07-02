@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { getTemplates, createTemplate, deleteTemplate } from '@/lib/api';
+import { getTemplates, createTemplate, updateTemplate, deleteTemplate } from '@/lib/api';
 import type { Template } from '@/types';
 
 interface MessageInputProps {
@@ -16,36 +16,13 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
   const [customTemplates, setCustomTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [newTemplateTitle, setNewTemplateTitle] = useState('');
   const [newTemplateText, setNewTemplateText] = useState('');
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
   const templatesRef = useRef<HTMLDivElement>(null);
-
-  // Common templates for My Pain Clinic
-  const cannedTemplates = [
-    {
-      title: '📅 Appointment Confirmation',
-      text: 'Hi [Patient Name],\n\nYour appointment at My Pain Clinic is confirmed for [Date] at [Time].\nBooking ID: [Booking ID].\nPlease arrive 10 minutes early.\n\n📍 Maps Link: B-1, V. N. Sphere Mall, Linking Road, Bandra (W), Mumbai - 400050\n📞 For queries, contact: +91 8169400905',
-    },
-    {
-      title: '📍 Clinic Location & Address',
-      text: '📍 My Pain Clinic Location Details:\n\nAddress: B-1, V. N. Sphere Mall, Linking Road, Bandra (W), Mumbai - 400050.\nMaps Link: https://maps.app.goo.gl/y3hF5\nPhone: +91 8169400905',
-    },
-    {
-      title: '🩺 Cervical / Back Pain Info',
-      text: 'Hi [Patient Name],\n\nFor cervical/back pain, we offer specialized consultations with Dr. Shah, including advanced physiotherapy and targeted pain-relief therapies.\n\nWould you like to schedule an assessment this week?',
-    },
-    {
-      title: '👋 General Greeting',
-      text: 'Hello, thank you for contacting My Pain Clinic. How can we help you today?',
-    },
-    {
-      title: '💊 Session Follow-up',
-      text: 'Hi [Patient Name],\n\nHope you are feeling better after your session. Please let us know if your pain has reduced or if you would like to book your next follow-up appointment.',
-    },
-  ];
 
   // Common emojis for quick access
   const quickEmojis = [
@@ -119,8 +96,22 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
     e.preventDefault();
     if (!newTemplateTitle.trim() || !newTemplateText.trim()) return;
     try {
-      const newTemp = await createTemplate(newTemplateTitle.trim(), newTemplateText.trim());
-      setCustomTemplates((prev) => [newTemp, ...prev]);
+      if (editingTemplateId) {
+        // Update existing template
+        const updatedTemp = await updateTemplate(
+          editingTemplateId,
+          newTemplateTitle.trim(),
+          newTemplateText.trim(),
+        );
+        setCustomTemplates((prev) =>
+          prev.map((t) => (t.id === editingTemplateId ? updatedTemp : t)),
+        );
+        setEditingTemplateId(null);
+      } else {
+        // Create new template
+        const newTemp = await createTemplate(newTemplateTitle.trim(), newTemplateText.trim());
+        setCustomTemplates((prev) => [newTemp, ...prev]);
+      }
       setNewTemplateTitle('');
       setNewTemplateText('');
       setIsCreatingTemplate(false);
@@ -128,6 +119,14 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
       console.error('Failed to save template:', error);
       alert('Failed to save template. Please try again.');
     }
+  };
+
+  const handleStartEditTemplate = (template: Template, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTemplateId(template.id);
+    setNewTemplateTitle(template.title);
+    setNewTemplateText(template.text);
+    setIsCreatingTemplate(true);
   };
 
   const handleDeleteTemplate = async (id: string, e: React.MouseEvent) => {
@@ -186,9 +185,11 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
           className="absolute bottom-full left-4 mb-2 w-80 p-2 rounded-xl bg-[#111B21] border border-[#2A3942] shadow-2xl animate-slide-in-up z-50 max-h-[350px] overflow-y-auto flex flex-col"
         >
           {isCreatingTemplate ? (
-            // Create Template Form
+            // Create/Edit Template Form
             <form onSubmit={handleSaveTemplate} className="p-3 flex flex-col gap-2.5">
-              <div className="text-xs font-semibold text-[#00A884]">Create Custom Template</div>
+              <div className="text-xs font-semibold text-[#00A884]">
+                {editingTemplateId ? '✏️ Edit Custom Template' : 'Create Custom Template'}
+              </div>
               <input
                 type="text"
                 required
@@ -209,6 +210,7 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
                   type="button"
                   onClick={() => {
                     setIsCreatingTemplate(false);
+                    setEditingTemplateId(null);
                     setNewTemplateTitle('');
                     setNewTemplateText('');
                   }}
@@ -220,37 +222,23 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
                   type="submit"
                   className="px-3 py-1.5 rounded-lg bg-[#00A884] text-white hover:bg-[#009675] font-semibold transition-smooth"
                 >
-                  Save Template
+                  {editingTemplateId ? 'Update Template' : 'Save Template'}
                 </button>
               </div>
             </form>
           ) : (
-            // Template List
+            // Unified Template List
             <>
-              <div className="text-xs font-semibold text-[#8696A0] px-3 py-1.5 border-b border-[#2A3942]/50 mb-1 flex justify-between items-center">
-                <span>Quick Templates</span>
+              <div className="text-xs font-semibold text-[#8696A0] px-3 py-2 border-b border-[#2A3942]/50 mb-1">
+                Saved Templates
               </div>
-              <div className="flex flex-col max-h-[140px] overflow-y-auto border-b border-[#2A3942]/30 pb-1 mb-1">
-                {cannedTemplates.map((template, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => insertTemplate(template.text)}
-                    className="w-full text-left px-3 py-2 text-sm text-[#E9EDEF] hover:bg-[#202C33] rounded-lg transition-smooth"
-                  >
-                    <div className="font-medium text-xs text-[#00A884] mb-0.5">{template.title}</div>
-                    <div className="text-xs text-[#8696A0] truncate">{template.text.replace(/\n/g, ' ')}</div>
-                  </button>
-                ))}
-              </div>
-
-              <div className="text-xs font-semibold text-[#8696A0] px-3 py-1.5 flex justify-between items-center bg-[#111B21]">
-                <span>Custom Templates</span>
-              </div>
-              <div className="flex flex-col max-h-[140px] overflow-y-auto min-h-[40px] bg-[#111B21]">
+              <div className="flex flex-col flex-1 overflow-y-auto max-h-[250px] min-h-[60px] bg-[#111B21] no-scrollbar">
                 {loadingTemplates ? (
-                  <div className="text-center py-4 text-xs text-gray-500">Loading custom templates...</div>
+                  <div className="text-center py-6 text-xs text-gray-500">Loading templates...</div>
                 ) : customTemplates.length === 0 ? (
-                  <div className="text-center py-3 text-xs text-gray-500 italic">No custom templates. Click below to add.</div>
+                  <div className="text-center py-6 text-xs text-gray-500 italic">
+                    No templates found.<br />Click below to create one.
+                  </div>
                 ) : (
                   customTemplates.map((template) => (
                     <div
@@ -259,21 +247,33 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
                     >
                       <button
                         onClick={() => insertTemplate(template.text)}
-                        className="flex-1 text-left px-3 py-2 text-sm text-[#E9EDEF]"
+                        className="flex-1 text-left px-3 py-2 text-sm text-[#E9EDEF] min-w-0"
                       >
-                        <div className="font-medium text-xs text-[#00A884] mb-0.5">{template.title}</div>
-                        <div className="text-xs text-[#8696A0] truncate max-w-[200px]">{template.text.replace(/\n/g, ' ')}</div>
+                        <div className="font-medium text-xs text-[#00A884] mb-0.5 truncate">{template.title}</div>
+                        <div className="text-xs text-[#8696A0] truncate">{template.text.replace(/\n/g, ' ')}</div>
                       </button>
-                      <button
-                        onClick={(e) => handleDeleteTemplate(template.id, e)}
-                        className="p-2 opacity-0 group-hover:opacity-100 hover:text-red-500 text-gray-400 transition-smooth shrink-0 mr-1"
-                        title="Delete Template"
-                      >
-                        {/* Trash Can Icon */}
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-0.5 shrink-0 mr-1 select-none">
+                        {/* Edit Button */}
+                        <button
+                          onClick={(e) => handleStartEditTemplate(template, e)}
+                          className="p-1.5 text-gray-400 hover:text-[#00A884] transition-smooth"
+                          title="Edit Template"
+                        >
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                          </svg>
+                        </button>
+                        {/* Delete Button */}
+                        <button
+                          onClick={(e) => handleDeleteTemplate(template.id, e)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 transition-smooth"
+                          title="Delete Template"
+                        >
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
