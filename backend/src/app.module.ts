@@ -6,6 +6,7 @@ import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { TemplatesModule } from './templates/templates.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { TemplatesModule } from './templates/templates.module';
     MessagesModule,
     GatewayModule,
     TemplatesModule,
+    UsersModule,
   ],
 })
 export class AppModule {}

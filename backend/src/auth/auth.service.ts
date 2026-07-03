@@ -1,14 +1,85 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
   ) {}
+
+  async onModuleInit() {
+    console.log('🔄 Verifying/updating Super Admin credentials...');
+    try {
+      await this.ensureAdminCredentials();
+    } catch (e) {
+      console.error('Error ensuring Admin credentials on startup:', e);
+    }
+  }
+
+  async ensureAdminCredentials() {
+    // 1. Ensure Standard Clinic Admin
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@mypainclnic.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const hashedAdminPassword = await bcrypt.hash(adminPassword, 12);
+
+    const existingAdmin = await this.prisma.user.findFirst({
+      where: { role: 'admin' },
+    });
+
+    if (existingAdmin) {
+      await this.prisma.user.update({
+        where: { id: existingAdmin.id },
+        data: {
+          email: adminEmail.toLowerCase().trim(),
+          password: hashedAdminPassword,
+        },
+      });
+      console.log(`✅ Clinic Admin credentials verified: ${adminEmail}`);
+    } else {
+      await this.prisma.user.create({
+        data: {
+          name: process.env.ADMIN_NAME || 'Clinic Admin',
+          email: adminEmail.toLowerCase().trim(),
+          password: hashedAdminPassword,
+          role: 'admin',
+        },
+      });
+      console.log(`✅ Clinic Admin account created: ${adminEmail}`);
+    }
+
+    // 2. Ensure Super Admin
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadminmpc@gmail.com';
+    const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'superadmin';
+    const hashedSuperPassword = await bcrypt.hash(superAdminPassword, 12);
+
+    const existingSuper = await this.prisma.user.findFirst({
+      where: { role: 'super_admin' },
+    });
+
+    if (existingSuper) {
+      await this.prisma.user.update({
+        where: { id: existingSuper.id },
+        data: {
+          email: superAdminEmail.toLowerCase().trim(),
+          password: hashedSuperPassword,
+        },
+      });
+      console.log(`✅ Super Admin credentials verified: ${superAdminEmail}`);
+    } else {
+      await this.prisma.user.create({
+        data: {
+          name: process.env.SUPER_ADMIN_NAME || 'Super Admin',
+          email: superAdminEmail.toLowerCase().trim(),
+          password: hashedSuperPassword,
+          role: 'super_admin',
+        },
+      });
+      console.log(`✅ Super Admin account created: ${superAdminEmail}`);
+    }
+  }
 
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });

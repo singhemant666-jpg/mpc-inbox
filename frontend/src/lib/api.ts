@@ -157,8 +157,19 @@ export async function updateTemplate(id: string, title: string, text: string): P
   return data;
 }
 
-export async function deleteTemplate(id: string): Promise<any> {
-  const { data } = await api.delete(`/templates/${id}`);
+// ---- User Management (Admin Only) ----
+export async function getUsers(): Promise<any[]> {
+  const { data } = await api.get<any[]>('/users');
+  return data;
+}
+
+export async function createUser(userData: any): Promise<any> {
+  const { data } = await api.post<any>('/users', userData);
+  return data;
+}
+
+export async function changeUserPassword(userId: string, password: string): Promise<any> {
+  const { data } = await api.post<any>(`/users/${userId}/change-password`, { password });
   return data;
 }
 

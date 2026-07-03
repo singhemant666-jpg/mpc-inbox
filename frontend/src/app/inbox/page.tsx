@@ -23,9 +23,7 @@ import type {
 import { ConversationList } from '@/components/sidebar/ConversationList';
 import { ChatWindow } from '@/components/chat/ChatWindow';
 
-// Notification sound (base64 short beep)
-const NOTIFICATION_SOUND_URL =
-  'data:audio/wav;base64,UklGRl9vT19teleXHcAASBhBVhwb3YAAABEYXRhAAAYQBAAAA==';
+// App styles are loaded from global CSS
 
 export default function InboxPage() {
   const router = useRouter();
@@ -52,13 +50,22 @@ export default function InboxPage() {
   // ---- Auth check ----
   useEffect(() => {
     const token = localStorage.getItem('inbox_token');
-    const userData = localStorage.getItem('inbox_user');
-    if (!token) {
+    const localUser = localStorage.getItem('inbox_user');
+
+    if (!token || !localUser) {
       router.replace('/login');
       return;
     }
-    if (userData) {
-      setUser(JSON.parse(userData));
+
+    try {
+      const parsedUser = JSON.parse(localUser);
+      if (parsedUser.role === 'super_admin') {
+        router.replace('/inbox/super-admin');
+        return;
+      }
+      setUser(parsedUser);
+    } catch (e) {
+      router.replace('/login');
     }
   }, [router]);
 
@@ -224,6 +231,7 @@ export default function InboxPage() {
         // Auto-mark as read if we're viewing it
         if (message.senderType === 'patient') {
           markAsRead(conversationId).catch(() => {});
+          playNotificationSound();
         }
       } else {
         // Play notification sound and show browser notification
@@ -307,10 +315,45 @@ export default function InboxPage() {
   // ---- Notification helpers ----
   const playNotificationSound = () => {
     try {
-      const audio = new Audio(NOTIFICATION_SOUND_URL);
-      audio.volume = 0.5;
-      audio.play().catch(() => {});
-    } catch {}
+      // Check if AudioContext is supported
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      
+      const audioCtx = new AudioCtx();
+      const now = audioCtx.currentTime;
+      
+      // WhatsApp notification is a double chime: high note then higher note (ding-ding)
+      
+      // Tone 1 (soft, high frequency)
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now); // A5 note
+      gain1.gain.setValueAtTime(0, now);
+      gain1.gain.linearRampToValueAtTime(0.08, now + 0.015);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.3);
+
+      // Tone 2 (higher frequency, delayed by 80ms)
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1046.5, now + 0.08); // C6 note
+      gain2.gain.setValueAtTime(0, now + 0.08);
+      gain2.gain.linearRampToValueAtTime(0.08, now + 0.095);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.4);
+    } catch (e) {
+      console.warn('Browser audio playback blocked or not supported:', e);
+    }
   };
 
   const showBrowserNotification = (message: Message) => {
@@ -386,12 +429,17 @@ export default function InboxPage() {
                 <span className="text-xs text-[#8696A0]">My Pain Clinic</span>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 rounded-lg text-xs bg-[#111B21] text-gray-300 hover:text-white hover:bg-[#374248]/50 transition-smooth"
-            >
-              Logout
-            </button>
+            
+            {/* Header Right Actions */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-3 py-1.5 rounded-lg text-xs bg-[#111B21] text-gray-300 hover:text-white hover:bg-[#374248]/50 transition-smooth"
+              >
+                Logout
+              </button>
+            </div>
           </div>
 
           <ConversationList
