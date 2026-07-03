@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { getTemplates, createTemplate, updateTemplate, deleteTemplate } from '@/lib/api';
+import { getTemplates, createTemplate, updateTemplate, deleteTemplate, uploadFile } from '@/lib/api';
 import type { Template } from '@/types';
 
 interface MessageInputProps {
-  onSend: (text: string) => void;
+  onSend: (text: string, messageType?: string) => void;
   sending: boolean;
 }
 
@@ -23,6 +23,11 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
   const templatesRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [attachType, setAttachType] = useState<'media' | 'document' | 'audio'>('media');
 
   // Common emojis for quick access
   const quickEmojis = [
@@ -48,6 +53,9 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
       if (templatesRef.current && !templatesRef.current.contains(e.target as Node)) {
         setShowTemplates(false);
       }
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setShowAttachMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -59,6 +67,57 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
     setText('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleFileClick = () => {
+    setShowAttachMenu(!showAttachMenu);
+    setShowEmoji(false);
+    setShowTemplates(false);
+  };
+
+  const handleAttachOptionClick = (type: 'media' | 'document' | 'audio') => {
+    setAttachType(type);
+    setShowAttachMenu(false);
+    // Tiny delay to let menu close first
+    setTimeout(() => {
+      fileInputRef.current?.click();
+    }, 50);
+  };
+
+  const getAcceptFilter = () => {
+    if (attachType === 'media') return 'image/*,video/*';
+    if (attachType === 'document') return '.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip';
+    if (attachType === 'audio') return 'audio/*';
+    return '*';
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Detect media type
+    let type = 'text';
+    if (attachType === 'media') {
+      type = file.type.startsWith('image/') ? 'image' : 'video';
+    } else if (attachType === 'document') {
+      type = 'document';
+    } else if (attachType === 'audio') {
+      type = 'audio';
+    }
+
+    setUploading(true);
+    try {
+      const result = await uploadFile(file);
+      onSend(result.url, type);
+    } catch (err) {
+      console.error('File upload failed:', err);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -297,12 +356,92 @@ export function MessageInput({ onSend, sending }: MessageInputProps) {
       <div className="flex items-center gap-3 w-full">
         {/* Left Actions: Plus Attachment, Emoji Button, Templates Button */}
         <div className="flex items-center gap-1.5 text-[#AEBAC1] shrink-0">
+          {/* Attachment Dropdown Menu */}
+          {showAttachMenu && (
+            <div
+              ref={attachMenuRef}
+              className="absolute bottom-full left-4 mb-2.5 bg-[#233138] border border-[#2A3942]/30 rounded-2xl shadow-2xl p-2.5 flex flex-col gap-1 w-52 animate-slide-in-up z-50 select-none text-gray-200 text-[13px]"
+            >
+              {/* Document Option */}
+              <button
+                type="button"
+                onClick={() => handleAttachOptionClick('document')}
+                className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-[#182229] transition-smooth font-medium text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#7f66ff]/20 flex items-center justify-center text-[#7f66ff]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z"/>
+                    <path d="M14 2v6h6"/>
+                    <path d="M16 13H8"/>
+                    <path d="M16 17H8"/>
+                    <path d="M10 9H8"/>
+                  </svg>
+                </div>
+                Document
+              </button>
+
+              {/* Photos & Videos Option */}
+              <button
+                type="button"
+                onClick={() => handleAttachOptionClick('media')}
+                className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-[#182229] transition-smooth font-medium text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#00a884]/20 flex items-center justify-center text-[#00a884]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                </div>
+                Photos & videos
+              </button>
+
+              {/* Audio Option */}
+              <button
+                type="button"
+                onClick={() => handleAttachOptionClick('audio')}
+                className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-[#182229] transition-smooth font-medium text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#ff7b47]/20 flex items-center justify-center text-[#ff7b47]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 18V5l12-2v13"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <circle cx="18" cy="16" r="3"/>
+                  </svg>
+                </div>
+                Audio
+              </button>
+            </div>
+          )}
+
           {/* Plus / Attach Button */}
-          <button className="p-2 hover:bg-[#374248]/50 rounded-full transition-smooth" title="Attach file">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-            </svg>
-          </button>
+          {uploading ? (
+            <div className="p-2 shrink-0">
+              <span className="w-5 h-5 border-2 border-[#00A884]/30 border-t-[#00A884] rounded-full animate-spin block" />
+            </div>
+          ) : (
+            <button
+              onClick={handleFileClick}
+              disabled={sending}
+              className={`p-2 rounded-full transition-smooth shrink-0 disabled:opacity-50 ${
+                showAttachMenu
+                  ? 'bg-[#374248] text-white rotate-45 scale-105'
+                  : 'hover:bg-[#374248]/50 hover:text-white'
+              }`}
+              title="Attach media, document, or audio"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+              </svg>
+            </button>
+          )}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept={getAcceptFilter()}
+            className="hidden"
+          />
 
           {/* Emoji button */}
           <button

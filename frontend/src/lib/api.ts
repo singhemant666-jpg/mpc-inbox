@@ -107,10 +107,26 @@ export async function getMessages(
   return data;
 }
 
-export async function sendMessage(conversationId: string, message: string) {
+export async function sendMessage(
+  conversationId: string,
+  message: string,
+  messageType: string = 'text',
+) {
   const { data } = await api.post('/messages/send', {
     conversationId,
     message,
+    messageType,
+  });
+  return data;
+}
+
+export async function uploadFile(file: File): Promise<{ url: string; filename: string; mimetype: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post('/messages/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
   });
   return data;
 }

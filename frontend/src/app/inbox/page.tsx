@@ -40,6 +40,7 @@ export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [totalUnread, setTotalUnread] = useState(0);
   const [isMobileShowChat, setIsMobileShowChat] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const selectedConvRef = useRef<string | null>(null);
   const userRef = useRef<User | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
@@ -119,6 +120,7 @@ export default function InboxPage() {
     async (conversation: Conversation) => {
       setSelectedConversation(conversation);
       selectedConvRef.current = conversation.id;
+      setSendError(null); // Clear any previous send errors
       setIsMobileShowChat(true);
       await loadMessages(conversation.id);
 
@@ -139,14 +141,17 @@ export default function InboxPage() {
 
   // ---- Send message ----
   const handleSendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, messageType: string = 'text') => {
       if (!selectedConversation || !text.trim()) return;
       setSendingMessage(true);
+      setSendError(null);
       try {
-        await sendMessage(selectedConversation.id, text);
+        await sendMessage(selectedConversation.id, text, messageType);
         // The Socket.IO event will update the UI in real-time
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to send message:', err);
+        const errMsg = err.response?.data?.message || 'Failed to send message. Please try again.';
+        setSendError(errMsg);
       } finally {
         setSendingMessage(false);
       }
@@ -357,8 +362,22 @@ export default function InboxPage() {
           {/* Header block with Profile and Logout */}
           <div className="px-4 py-3 flex items-center justify-between bg-[#202C33] shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-wa-secondary text-white font-semibold text-sm flex items-center justify-center border border-[#2A3942]">
-                {user ? user.name.slice(0, 2).toUpperCase() : 'AG'}
+              <div className="w-10 h-10 rounded-full overflow-hidden border border-[#2A3942] bg-[#202C33] shrink-0 flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="Clinic Logo"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const parent = e.currentTarget.parentElement;
+                    if (parent && !parent.querySelector('.avatar-fallback')) {
+                      const fallback = document.createElement('span');
+                      fallback.className = 'text-white font-semibold text-sm avatar-fallback';
+                      fallback.innerText = user ? user.name.slice(0, 2).toUpperCase() : 'AG';
+                      parent.appendChild(fallback);
+                    }
+                  }}
+                />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-white leading-tight">
@@ -400,6 +419,7 @@ export default function InboxPage() {
             onBack={handleMobileBack}
             onConvert={handleConvertConversation}
             onTransferToLeads={handleTransferToLeads}
+            sendError={sendError}
           />
         </div>
       </div>

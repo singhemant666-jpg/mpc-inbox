@@ -77,22 +77,31 @@ export class WebhookService {
     const messageType = messagePayload.type || 'text';
     const gupshupMessageId = messagePayload.id;
 
-    // Extract message text based on type
+    // Extract message text and sidebar preview text based on type
     let messageText = '';
+    let previewText = '';
+
     if (messageType === 'text') {
       messageText = messagePayload.payload?.text || '';
+      previewText = messageText;
     } else if (messageType === 'image') {
-      messageText = '[📷 Image]';
+      messageText = messagePayload.payload?.url || '';
+      previewText = '📷 Image';
     } else if (messageType === 'audio') {
-      messageText = '[🎵 Audio]';
+      messageText = messagePayload.payload?.url || '';
+      previewText = '🎵 Audio';
     } else if (messageType === 'video') {
-      messageText = '[🎥 Video]';
+      messageText = messagePayload.payload?.url || '';
+      previewText = '🎥 Video';
     } else if (messageType === 'document') {
-      messageText = '[📄 Document]';
+      messageText = messagePayload.payload?.url || '';
+      previewText = '📄 Document';
     } else if (messageType === 'location') {
-      messageText = '[📍 Location]';
+      messageText = messagePayload.payload?.url || '';
+      previewText = '📍 Location';
     } else {
       messageText = `[${messageType}]`;
+      previewText = `[${messageType}]`;
     }
 
     if (!phoneNumber || !messageText) {
@@ -100,7 +109,7 @@ export class WebhookService {
       return;
     }
 
-    console.log(`📩 Incoming from ${phoneNumber}: "${messageText.slice(0, 50)}"`);
+    console.log(`📩 Incoming from ${phoneNumber}: "${previewText.slice(0, 50)}"`);
 
     // Find or create conversation
     let conversation = await this.prisma.conversation.findUnique({
@@ -120,7 +129,7 @@ export class WebhookService {
           phoneNumber,
           conversationType,
           assignedUserId,
-          lastMessage: messageText,
+          lastMessage: previewText,
           lastMessageSender: 'patient',
           lastMessageTime: new Date(),
           unreadCount: 1,
@@ -132,7 +141,7 @@ export class WebhookService {
     } else {
       // Update patient name if Gupshup provides a better one
       const updateData: any = {
-        lastMessage: messageText,
+        lastMessage: previewText,
         lastMessageSender: 'patient',
         lastMessageTime: new Date(),
         unreadCount: { increment: 1 },
@@ -179,7 +188,7 @@ export class WebhookService {
       id: conversation.id,
       patientName: conversation.patientName,
       phoneNumber: conversation.phoneNumber,
-      lastMessage: messageText,
+      lastMessage: previewText,
       lastMessageSender: 'patient',
       lastMessageTime: conversation.lastMessageTime,
       unreadCount: conversation.unreadCount,

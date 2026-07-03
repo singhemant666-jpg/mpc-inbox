@@ -120,7 +120,12 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
       className={`flex ${isAgent ? 'justify-end' : 'justify-start'} mb-1.5 animate-slide-in-up`}
     >
       <div
-        className={`max-w-[75%] md:max-w-[65%] px-3 py-1.5 rounded-lg shadow-sm select-text transition-all duration-500
+        className={`max-w-[75%] md:max-w-[65%] rounded-lg shadow-sm select-text transition-all duration-500
+          ${
+            message.messageType === 'image' || message.messageType === 'video'
+              ? 'p-1'
+              : 'px-3 py-1.5'
+          }
           ${
             isHighlighted
               ? 'ring-2 ring-[#00A884] bg-[#007F63]/90 shadow-emerald-950/60 shadow-lg scale-[1.02]'
@@ -130,13 +135,76 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
           }
         `}
       >
-        {/* Message text */}
-        <p className="text-[14px] text-gray-100 leading-relaxed whitespace-pre-wrap break-words select-text">
-          {renderMessageContent(message.message)}
-        </p>
+        {/* Message text / media */}
+        {message.messageType === 'image' ? (
+          <div className="relative rounded-md overflow-hidden border border-[#2A3942]/20 cursor-pointer max-w-[280px] bg-[#111B21]">
+            <img
+              src={message.message}
+              alt="Sent image"
+              className="w-full h-auto object-cover max-h-[260px] hover:opacity-90 transition-opacity"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  const event = new CustomEvent('open-lightbox', {
+                    detail: { url: message.message, type: 'image' },
+                  });
+                  window.dispatchEvent(event);
+                }
+              }}
+            />
+          </div>
+        ) : message.messageType === 'video' ? (
+          <div className="relative rounded-md overflow-hidden border border-[#2A3942]/20 max-w-[280px] bg-[#111B21]">
+            <video
+              src={message.message}
+              controls
+              className="w-full h-auto max-h-[260px] object-cover"
+            />
+          </div>
+        ) : message.messageType === 'document' ? (
+          <a
+            href={message.message}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-2 bg-[#111B21] rounded-lg border border-[#2A3942]/20 hover:bg-[#182229] transition-smooth max-w-[280px] text-left cursor-pointer mb-1"
+          >
+            <div className="w-10 h-10 rounded-lg bg-[#7f66ff]/15 flex items-center justify-center text-[#7f66ff] shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z"/>
+                <path d="M14 2v6h6"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-semibold text-[#E9EDEF] block truncate leading-tight">
+                {decodeURIComponent(message.message.substring(message.message.lastIndexOf('/') + 1)) || 'Document'}
+              </span>
+              <span className="text-[10px] text-gray-500 block mt-0.5">Click to view file</span>
+            </div>
+            <div className="text-gray-400 p-1 hover:text-white shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </div>
+          </a>
+        ) : message.messageType === 'audio' ? (
+          <div className="p-1 max-w-[280px] bg-[#111B21]/30 rounded-lg border border-[#2A3942]/10 mb-1">
+            <audio
+              src={message.message}
+              controls
+              className="w-full max-w-[260px] h-9 custom-audio-player"
+            />
+          </div>
+        ) : (
+          <p className="text-[14px] text-gray-100 leading-relaxed whitespace-pre-wrap break-words select-text">
+            {renderMessageContent(message.message)}
+          </p>
+        )}
 
         {/* Timestamp + Status */}
-        <div className="flex items-center justify-end gap-0.5 mt-1 -mb-0.5 select-none">
+        <div className={`flex items-center justify-end gap-0.5 mt-1 -mb-0.5 select-none ${
+          message.messageType === 'image' || message.messageType === 'video' ? 'px-2 pb-1.5' : ''
+        }`}>
           <span className="text-[10px] text-gray-400">{time}</span>
           {isAgent && getStatusIcon()}
         </div>

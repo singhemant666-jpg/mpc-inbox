@@ -9,10 +9,11 @@ interface ChatWindowProps {
   messages: Message[];
   loading: boolean;
   sending: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, messageType?: string) => void;
   onBack: () => void;
   onConvert?: () => void;
   onTransferToLeads?: () => void;
+  sendError?: string | null;
 }
 
 export function ChatWindow({
@@ -24,6 +25,7 @@ export function ChatWindow({
   onBack,
   onConvert,
   onTransferToLeads,
+  sendError,
 }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +34,22 @@ export function ChatWindow({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+  // Lightbox Modal State
+  const [lightbox, setLightbox] = useState<{ url: string; type: string } | null>(null);
+
+  // Listen to custom lightbox events from message bubbles
+  useEffect(() => {
+    const handleOpenLightbox = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setLightbox({
+        url: customEvent.detail.url,
+        type: customEvent.detail.type,
+      });
+    };
+    window.addEventListener('open-lightbox', handleOpenLightbox);
+    return () => window.removeEventListener('open-lightbox', handleOpenLightbox);
+  }, []);
 
   // Auto-scroll to bottom on new messages (unless highlighting/searching is active)
   useEffect(() => {
@@ -191,6 +209,32 @@ export function ChatWindow({
           )}
         </div>
 
+        {/* Error Alert Banner */}
+        {sendError && (
+          <div className="mx-4 md:mx-6 mb-2 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-start gap-2.5 text-red-200 text-xs animate-fade-in shrink-0 select-text">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-red-400 shrink-0 mt-0.5"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <div className="flex-1">
+              <span className="font-semibold block mb-0.5">Cannot Send Message</span>
+              <span>{sendError}</span>
+            </div>
+          </div>
+        )}
+
         {/* Message Input */}
         <MessageInput onSend={onSend} sending={sending} />
       </div>
@@ -266,6 +310,44 @@ export function ChatWindow({
                   </p>
                 </button>
               ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal Overlay */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4 animate-fade-in cursor-zoom-out select-none"
+          onClick={() => setLightbox(null)}
+        >
+          {/* Close Button */}
+          <button
+            className="absolute top-4 right-4 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2.5 rounded-full transition-smooth border border-white/5 shadow-lg"
+            onClick={() => setLightbox(null)}
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+          
+          {/* Main Media Preview */}
+          <div className="relative max-w-full max-h-[85vh] flex items-center justify-center">
+            {lightbox.type === 'image' ? (
+              <img
+                src={lightbox.url}
+                alt="Preview"
+                className="max-w-full max-h-[85vh] object-contain rounded shadow-2xl animate-scale-up"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <video
+                src={lightbox.url}
+                controls
+                autoPlay
+                className="max-w-full max-h-[85vh] object-contain rounded shadow-2xl animate-scale-up"
+                onClick={(e) => e.stopPropagation()}
+              />
             )}
           </div>
         </div>
