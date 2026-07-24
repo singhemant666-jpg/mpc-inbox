@@ -2,9 +2,11 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -96,5 +98,53 @@ export class MessagesController {
       mimetype: file.mimetype,
       size: file.size,
     };
+  }
+
+  /**
+   * DELETE /api/messages/:id
+   * Delete a message (local database only)
+   */
+  @Delete('messages/:id')
+  async deleteMessage(@Param('id') id: string) {
+    return this.messagesService.deleteMessage(id);
+  }
+
+  /**
+   * GET /api/media/proxy?url=<encoded_url>
+   * Proxy external media (Gupshup CDN) to bypass CORS restrictions.
+   * This allows the browser to play audio/video from external URLs.
+   */
+  @Get('media/proxy')
+  async proxyMedia(@Query('url') url: string, @Req() req: any, @Res() res: any) {
+    if (!url) {
+      throw new BadRequestException('Missing url parameter');
+    }
+
+    try {
+      const response = await axios.get(url, {
+        responseType: 'stream',
+        timeout: 30000,
+      });
+
+      // Forward content-type header
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
+
+      // Forward content-length if available
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+
+      // Allow range requests for seeking
+      res.setHeader('Accept-Ranges', 'bytes');
+
+      // Cache for 1 hour to avoid re-fetching
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+
+      response.data.pipe(res);
+    } catch (error) {
+      console.error('Media proxy error:', error.message);
+      res.status(502).json({ error: 'Failed to fetch media' });
+    }
   }
 }

@@ -7,7 +7,7 @@ import type {
   Template,
 } from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -120,6 +120,11 @@ export async function sendMessage(
   return data;
 }
 
+export async function deleteMessage(messageId: string) {
+  const { data } = await api.delete(`/messages/${messageId}`);
+  return data;
+}
+
 export async function uploadFile(file: File): Promise<{ url: string; filename: string; mimetype: string }> {
   const formData = new FormData();
   formData.append('file', file);
@@ -154,6 +159,11 @@ export async function createTemplate(title: string, text: string): Promise<Templ
 
 export async function updateTemplate(id: string, title: string, text: string): Promise<Template> {
   const { data } = await api.patch<Template>(`/templates/${id}`, { title, text });
+  return data;
+}
+
+export async function deleteTemplate(id: string): Promise<any> {
+  const { data } = await api.delete(`/templates/${id}`);
   return data;
 }
 

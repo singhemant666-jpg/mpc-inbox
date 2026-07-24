@@ -25,6 +25,7 @@ export interface Message {
   messageType: string;
   status: 'sent' | 'delivered' | 'read' | 'received' | 'failed';
   createdAt: string;
+  reaction?: string;
 }
 
 export interface User {

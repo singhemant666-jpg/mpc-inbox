@@ -202,4 +202,89 @@ export class MessagesService {
       },
     };
   }
+
+  /**
+   * Delete a message (from inbox database only).
+   */
+  async deleteMessage(id: string) {
+    const existingMessage = await this.prisma.message.findUnique({
+      where: { id },
+    });
+
+    if (!existingMessage) {
+      throw new NotFoundException('Message not found');
+    }
+
+    // Delete the message
+    await this.prisma.message.delete({
+      where: { id },
+    });
+
+    // Check if this was the latest message in the conversation
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: existingMessage.conversationId },
+    });
+
+    if (conversation) {
+      // Find the new latest message for this conversation
+      const latestMessage = await this.prisma.message.findFirst({
+        where: { conversationId: existingMessage.conversationId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const newPreview = latestMessage ? this.getMessagePreviewText(latestMessage) : '';
+      const newSender = latestMessage ? latestMessage.senderType : 'patient';
+      const newTime = latestMessage ? latestMessage.createdAt : new Date();
+
+      await this.prisma.conversation.update({
+        where: { id: existingMessage.conversationId },
+        data: {
+          lastMessage: newPreview,
+          lastMessageSender: newSender,
+          lastMessageTime: newTime,
+        },
+      });
+
+      // Emit conversation update
+      this.eventsGateway.emitConversationUpdated({
+        id: conversation.id,
+        patientName: conversation.patientName,
+        phoneNumber: conversation.phoneNumber,
+        lastMessage: newPreview,
+        lastMessageSender: newSender,
+        lastMessageTime: newTime,
+        unreadCount: conversation.unreadCount,
+        conversationType: conversation.conversationType,
+        assignedUserId: conversation.assignedUserId,
+      });
+    }
+
+    // Emit message_deleted via Socket.IO
+    this.eventsGateway.server.emit('message_deleted', {
+      id,
+      conversationId: existingMessage.conversationId,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Helper to get a clean formatted preview text for different message types.
+   */
+  private getMessagePreviewText(message: { message: string; messageType: string }): string {
+    const { message: text, messageType } = message;
+    if (messageType === 'reaction') {
+      try {
+        const parsed = JSON.parse(text);
+        return parsed.emoji ? `Reacted ${parsed.emoji}` : 'Reaction removed';
+      } catch {
+        return 'Reacted';
+      }
+    }
+    if (messageType === 'image') return '📷 Image';
+    if (messageType === 'video') return '🎥 Video';
+    if (messageType === 'audio') return '🎵 Audio';
+    if (messageType === 'document') return '📄 Document';
+    return text;
+  }
 }

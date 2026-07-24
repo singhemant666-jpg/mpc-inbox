@@ -154,7 +154,7 @@ export function ChatWindow({
         {/* Messages Area */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-y-auto chat-bg px-4 md:px-6 py-4 flex flex-col"
+          className="flex-1 overflow-y-auto chat-bg px-4 md:px-6 pt-4 pb-8 flex flex-col"
         >
           {loading ? (
             // Loading skeleton
@@ -204,6 +204,8 @@ export function ChatWindow({
                   </div>
                 );
               })}
+              {/* Spacious bottom gap to separate the last message bubble from the chat input section */}
+              <div className="h-8 shrink-0" />
               <div ref={messagesEndRef} />
             </div>
           )}

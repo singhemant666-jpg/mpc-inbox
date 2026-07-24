@@ -25,6 +25,50 @@ import { ChatWindow } from '@/components/chat/ChatWindow';
 
 // App styles are loaded from global CSS
 
+// Helper to process reaction type messages and attach them to their target messages in memory
+function processReactions(rawMessages: Message[]): Message[] {
+  // Deep clone to avoid mutating standard objects directly
+  const list = rawMessages.map(m => ({ ...m, reaction: undefined as string | undefined }));
+  
+  // Find all reactions
+  const reactions = list.filter(m => m.messageType === 'reaction');
+  const normalMessages = list.filter(m => m.messageType !== 'reaction');
+  
+  for (const rx of reactions) {
+    try {
+      const parsed = JSON.parse(rx.message);
+      const emoji = parsed.emoji;
+      const targetId = parsed.targetMessageId;
+      const contextId = parsed.contextId;
+      const contextGsId = parsed.contextGsId;
+      
+      if (emoji && (targetId || contextId || contextGsId)) {
+        // Find the original message being reacted to using any of the available IDs
+        const targetMsg = normalMessages.find(m => 
+          (targetId && m.gupshupMessageId === targetId) ||
+          (contextId && m.gupshupMessageId === contextId) ||
+          (contextGsId && m.gupshupMessageId === contextGsId) ||
+          (targetId && m.id === targetId) ||
+          (contextId && m.id === contextId) ||
+          (contextGsId && m.id === contextGsId)
+        );
+        
+        if (targetMsg) {
+          if (emoji === 'Reaction removed') {
+            targetMsg.reaction = undefined;
+          } else {
+            targetMsg.reaction = emoji;
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore if not valid JSON
+    }
+  }
+  
+  return normalMessages;
+}
+
 export default function InboxPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -114,7 +158,7 @@ export default function InboxPage() {
     setLoadingMessages(true);
     try {
       const result = await getMessages(conversationId, { limit: 100 });
-      setMessages(result.data);
+      setMessages(processReactions(result.data));
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {
@@ -225,7 +269,7 @@ export default function InboxPage() {
         setMessages((prev) => {
           // Avoid duplicates
           if (prev.some((m) => m.id === message.id)) return prev;
-          return [...prev, message];
+          return processReactions([...prev, message]);
         });
 
         // Auto-mark as read if we're viewing it
@@ -304,6 +348,12 @@ export default function InboxPage() {
       );
     });
 
+    socket.on('message_deleted', (event: { id: string; conversationId: string }) => {
+      if (selectedConvRef.current === event.conversationId) {
+        setMessages((prev) => prev.filter((m) => m.id !== event.id));
+      }
+    });
+
     return () => {
       socket.off('new_message');
       socket.off('conversation_updated');
@@ -360,8 +410,20 @@ export default function InboxPage() {
     if (!('Notification' in window)) return;
 
     if (Notification.permission === 'granted') {
+      let bodyText = message.message;
+      if (message.messageType === 'reaction') {
+        try {
+          const parsed = JSON.parse(message.message);
+          bodyText = parsed.emoji === 'Reaction removed'
+            ? 'Removed a reaction'
+            : `Reacted ${parsed.emoji}`;
+        } catch (e) {
+          bodyText = 'Reacted';
+        }
+      }
+
       new Notification('New Patient Message', {
-        body: message.message.slice(0, 100),
+        body: bodyText.slice(0, 100),
         icon: '/favicon.ico',
         tag: message.conversationId,
       });

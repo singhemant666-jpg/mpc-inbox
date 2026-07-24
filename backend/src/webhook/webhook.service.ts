@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../gateway/events.gateway';
+import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Media upload directory (same as messages controller uses)
+const UPLOAD_DIR = './public/uploads';
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
 
 // Phrases that indicate a new lead (first message from patient)
 const NEW_LEAD_PHRASES = [
@@ -38,6 +47,57 @@ export class WebhookService {
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     return user?.id || null;
+  }
+
+  /**
+   * Download media from a Gupshup URL and store it locally.
+   * Returns the local URL path (e.g., /public/uploads/1234567890-audio.ogg)
+   * Falls back to the original URL if download fails.
+   */
+  private async downloadAndStoreMedia(
+    externalUrl: string,
+    mediaType: string,
+  ): Promise<string> {
+    try {
+      if (!externalUrl) return externalUrl;
+
+      const response = await axios.get(externalUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+
+      // Determine file extension from content-type or mediaType
+      const contentType = response.headers['content-type'] || '';
+      let ext = 'bin';
+      if (mediaType === 'audio') {
+        ext = contentType.includes('ogg') ? 'ogg' : contentType.includes('mp3') ? 'mp3' : 'ogg';
+      } else if (mediaType === 'image') {
+        ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+      } else if (mediaType === 'video') {
+        ext = contentType.includes('mp4') ? 'mp4' : 'mp4';
+      } else if (mediaType === 'document' || mediaType === 'file') {
+        // Try to extract extension from URL
+        const urlPath = new URL(externalUrl).pathname;
+        const urlExt = path.extname(urlPath).replace('.', '');
+        ext = urlExt || 'pdf';
+      } else if (mediaType === 'sticker') {
+        ext = 'webp';
+      }
+
+      const filename = `${Date.now()}-${Math.round(Math.random() * 1e6)}-${mediaType}.${ext}`;
+      const filepath = path.join(UPLOAD_DIR, filename);
+
+      fs.writeFileSync(filepath, Buffer.from(response.data));
+
+      console.log(`💾 Media saved locally: ${filepath} (${(response.data.byteLength / 1024).toFixed(1)} KB)`);
+
+      // Return a relative URL that the frontend can access via the static file server
+      return `/public/uploads/${filename}`;
+    } catch (error) {
+      console.error(`⚠️ Failed to download media (${mediaType}):`, error.message);
+      // Fall back to the original Gupshup URL (may expire)
+      return externalUrl;
+    }
   }
 
   /**
@@ -84,18 +144,87 @@ export class WebhookService {
     if (messageType === 'text') {
       messageText = messagePayload.payload?.text || '';
       previewText = messageText;
+    } else if (messageType === 'button_reply') {
+      messageText = messagePayload.payload?.text || messagePayload.payload?.title || '[button_reply]';
+      previewText = messageText;
+    } else if (messageType === 'reaction') {
+      // Debug write to inspect the exact payload
+      try {
+        const debugPath = 'C:\\Users\\DELL\\.gemini\\antigravity-ide\\brain\\f4ebd43d-7641-4ef0-a94b-d8cfaa891cc5\\scratch\\reaction_payload.json';
+        const fs = require('fs');
+        const dir = 'C:\\Users\\DELL\\.gemini\\antigravity-ide\\brain\\f4ebd43d-7641-4ef0-a94b-d8cfaa891cc5\\scratch';
+        if (!fs.existsSync(dir)){
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(debugPath, JSON.stringify(webhookPayload, null, 2));
+        console.log('📝 Saved debug reaction payload to scratch');
+      } catch (e) {
+        console.error('Failed to write debug payload:', e);
+      }
+
+      const emoji = messagePayload.payload?.emoji;
+      
+      // Look for target message ID in all possible Gupshup/WhatsApp fields
+      const targetMessageId = 
+        messagePayload.payload?.id || 
+        messagePayload.payload?.messageId || 
+        messagePayload.payload?.message_id || 
+        webhookPayload.context?.id || 
+        webhookPayload.context?.gsId;
+      
+      const contextId = webhookPayload.context?.id;
+      const contextGsId = webhookPayload.context?.gsId;
+      
+      messageText = JSON.stringify({ 
+        emoji, 
+        targetMessageId,
+        contextId,
+        contextGsId
+      });
+      
+      let originalText = '';
+      if (targetMessageId || contextId || contextGsId) {
+        const originalMsg = await this.prisma.message.findFirst({
+          where: {
+            OR: [
+              { gupshupMessageId: targetMessageId },
+              { gupshupMessageId: contextId },
+              { gupshupMessageId: contextGsId },
+            ].filter(cond => cond.gupshupMessageId), // Filter out undefined/null conditions
+          },
+        });
+        if (originalMsg) {
+          originalText = originalMsg.message;
+        }
+      }
+      
+      if (emoji) {
+        previewText = originalText
+          ? `Reacted ${emoji} to: "${originalText.slice(0, 20)}${originalText.length > 20 ? '...' : ''}"`
+          : `Reacted ${emoji}`;
+      } else {
+        previewText = 'Reaction removed';
+      }
     } else if (messageType === 'image') {
-      messageText = messagePayload.payload?.url || '';
+      const gupshupUrl = messagePayload.payload?.url || '';
+      messageText = await this.downloadAndStoreMedia(gupshupUrl, 'image');
       previewText = '📷 Image';
     } else if (messageType === 'audio') {
-      messageText = messagePayload.payload?.url || '';
+      const gupshupUrl = messagePayload.payload?.url || '';
+      messageText = await this.downloadAndStoreMedia(gupshupUrl, 'audio');
       previewText = '🎵 Audio';
     } else if (messageType === 'video') {
-      messageText = messagePayload.payload?.url || '';
+      const gupshupUrl = messagePayload.payload?.url || '';
+      messageText = await this.downloadAndStoreMedia(gupshupUrl, 'video');
       previewText = '🎥 Video';
-    } else if (messageType === 'document') {
-      messageText = messagePayload.payload?.url || '';
+    } else if (messageType === 'document' || messageType === 'file') {
+      const gupshupUrl = messagePayload.payload?.url || '';
+      messageText = await this.downloadAndStoreMedia(gupshupUrl, 'document');
       previewText = '📄 Document';
+    } else if (messageType === 'sticker') {
+      const gupshupUrl = messagePayload.payload?.url || '';
+      messageText = await this.downloadAndStoreMedia(gupshupUrl, 'sticker');
+      previewText = '🏷️ Sticker';
     } else if (messageType === 'location') {
       messageText = messagePayload.payload?.url || '';
       previewText = '📍 Location';
@@ -153,6 +282,18 @@ export class WebhookService {
         !senderName.startsWith('Patient ')
       ) {
         updateData.patientName = senderName;
+      }
+
+      // If this is a button_reply message, reclassify as new_lead
+      if (messageType === 'button_reply' || isNewLead(messageText)) {
+        if (conversation.conversationType !== 'new_lead') {
+          const leadsUserId = await this.getAssignedUserId('new_lead');
+          updateData.conversationType = 'new_lead';
+          updateData.assignedUserId = leadsUserId;
+          console.log(
+            `🔄 Conversation ${conversation.id} reclassified to new_lead (button_reply received)`,
+          );
+        }
       }
 
       conversation = await this.prisma.conversation.update({
@@ -230,13 +371,24 @@ export class WebhookService {
 
     // Find and update the message status
     const message = await this.prisma.message.findFirst({
-      where: { gupshupMessageId },
+      where: {
+        OR: [
+          { gupshupMessageId: eventPayload.gsId },
+          { gupshupMessageId: eventPayload.id },
+        ],
+      },
     });
 
     if (message) {
+      const updateData: any = { status };
+      // Save the WhatsApp Message ID (wamid) in database for reaction correlation
+      if (eventPayload.id && message.gupshupMessageId !== eventPayload.id) {
+        updateData.gupshupMessageId = eventPayload.id;
+      }
+
       await this.prisma.message.update({
         where: { id: message.id },
-        data: { status },
+        data: updateData,
       });
 
       // Emit status update via Socket.IO

@@ -17,9 +17,9 @@ async function bootstrap() {
   // Global prefix for all API routes
   app.setGlobalPrefix('api');
 
-  // Enable CORS for frontend
+  // Enable CORS for frontend (allow tunnel URLs for demos)
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: true,
     credentials: true,
   });
 

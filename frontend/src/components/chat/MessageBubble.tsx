@@ -8,39 +8,23 @@ function VoiceMessagePlayer({ audioUrl }: { audioUrl: string }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [error, setError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => {
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-
-    const onLoadedMetadata = () => {
-      setDuration(audio.duration || 0);
-    };
-
-    const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime || 0);
-    };
-
-    const onEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-
-    audio.addEventListener('loadedmetadata', onLoadedMetadata);
-    audio.addEventListener('timeupdate', onTimeUpdate);
-    audio.addEventListener('ended', onEnded);
-
-    // Trigger metadata load
-    audio.load();
-
-    return () => {
-      audio.pause();
-      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
-      audio.removeEventListener('timeupdate', onTimeUpdate);
-      audio.removeEventListener('ended', onEnded);
-    };
-  }, [audioUrl]);
+  // For local files (/public/uploads/...) use directly.
+  // For external URLs (old Gupshup links), try proxy.
+  const resolvedUrl = (() => {
+    if (typeof window === 'undefined') return audioUrl;
+    // Local files served by the backend - use directly
+    if (audioUrl.startsWith('/public/') || audioUrl.startsWith('/uploads/')) {
+      return audioUrl;
+    }
+    // External URLs - proxy through backend
+    if (audioUrl.startsWith('http') && !audioUrl.includes(window.location.host)) {
+      return `/api/media/proxy?url=${encodeURIComponent(audioUrl)}`;
+    }
+    return audioUrl;
+  })();
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -48,7 +32,10 @@ function VoiceMessagePlayer({ audioUrl }: { audioUrl: string }) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().catch((err) => console.error('Audio play failed:', err));
+      audioRef.current.play().catch((err) => {
+        console.error('Audio play failed:', err);
+        setError(true);
+      });
       setIsPlaying(true);
     }
   };
@@ -71,40 +58,68 @@ function VoiceMessagePlayer({ audioUrl }: { audioUrl: string }) {
     e.preventDefault();
     e.stopPropagation();
 
-    // Fetch the audio as a blob to force download with file extension
-    fetch(audioUrl)
+    // For local files, fetch and trigger download
+    fetch(resolvedUrl)
       .then((res) => res.blob())
       .then((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        
-        // Detect extension from mimetype or default to ogg
-        const ext = blob.type.split('/')[1]?.split(';')[0] || 'ogg';
-        const sanitizedExt = ext === 'octet-stream' ? 'ogg' : ext;
-        
-        // WhatsApp files are usually ogg
-        a.download = `voice-message.${sanitizedExt}`;
+        a.download = 'voice-message.ogg';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       })
       .catch(() => {
-        // Fallback if CORS blocks blob fetch
         window.open(audioUrl, '_blank');
       });
   };
 
   return (
     <div className="flex items-center gap-3 py-2 px-2.5 bg-[#111B21]/50 rounded-xl border border-[#2A3942]/20 w-[275px] select-none text-left mb-1">
+      {/* Hidden native audio element */}
+      <audio
+        ref={audioRef}
+        src={resolvedUrl}
+        preload="metadata"
+        onLoadedMetadata={() => {
+          if (audioRef.current) {
+            setDuration(audioRef.current.duration || 0);
+          }
+        }}
+        onTimeUpdate={() => {
+          if (audioRef.current) {
+            setCurrentTime(audioRef.current.currentTime || 0);
+          }
+        }}
+        onEnded={() => {
+          setIsPlaying(false);
+          setCurrentTime(0);
+        }}
+        onError={() => {
+          setError(true);
+          setIsPlaying(false);
+        }}
+        style={{ display: 'none' }}
+      />
+
       {/* Play/Pause Button */}
       <button
         type="button"
-        onClick={togglePlay}
-        className="w-9 h-9 rounded-full bg-[#00A884] text-[#111B21] flex items-center justify-center hover:scale-105 active:scale-95 transition-smooth shrink-0"
+        onClick={error ? () => window.open(audioUrl, '_blank') : togglePlay}
+        className={`w-9 h-9 rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-smooth shrink-0 ${
+          error ? 'bg-red-500/80 text-white' : 'bg-[#00A884] text-[#111B21]'
+        }`}
+        title={error ? 'Open in new tab' : isPlaying ? 'Pause' : 'Play'}
       >
-        {isPlaying ? (
+        {error ? (
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        ) : isPlaying ? (
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <rect x="5" y="4" width="4" height="16" rx="1"/>
             <rect x="15" y="4" width="4" height="16" rx="1"/>
@@ -118,14 +133,18 @@ function VoiceMessagePlayer({ audioUrl }: { audioUrl: string }) {
 
       {/* Progress Bar & Details */}
       <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <input
-          type="range"
-          min={0}
-          max={duration || 100}
-          value={currentTime}
-          onChange={handleSeek}
-          className="w-full accent-[#00A884] bg-gray-600 h-1 rounded-lg appearance-none cursor-pointer"
-        />
+        {error ? (
+          <span className="text-[10px] text-red-400">Audio expired. Click to open.</span>
+        ) : (
+          <input
+            type="range"
+            min={0}
+            max={duration || 100}
+            value={currentTime}
+            onChange={handleSeek}
+            className="w-full accent-[#00A884] bg-gray-600 h-1 rounded-lg appearance-none cursor-pointer"
+          />
+        )}
         
         <div className="flex justify-between items-center text-[9px] text-[#8696A0]">
           <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
@@ -163,6 +182,45 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
   const isAgent = message.senderType === 'agent';
   const time = formatMessageTime(message.createdAt);
+
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showMenu]);
+
+  const handleDownloadImage = (e: React.MouseEvent, imageUrl: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fetch(imageUrl)
+      .then((res) => res.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ext = blob.type.split('/')[1]?.split(';')[0] || 'jpg';
+        a.download = `whatsapp-image.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        window.open(imageUrl, '_blank');
+      });
+  };
 
   // Status icon for agent messages
   const getStatusIcon = () => {
@@ -269,13 +327,17 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
   return (
     <div
       id={`msg-${message.id}`}
-      className={`flex ${isAgent ? 'justify-end' : 'justify-start'} mb-1.5 animate-slide-in-up`}
+      className={`flex ${isAgent ? 'justify-end' : 'justify-start'} ${
+        message.reaction ? 'mb-3.5' : 'mb-1' // Snug, tight spacing by default, clears space only when reacted
+      } animate-slide-in-up`}
     >
       <div
-        className={`max-w-[75%] md:max-w-[65%] rounded-lg shadow-sm select-text transition-all duration-500
+        className={`relative max-w-[75%] md:max-w-[65%] rounded-lg shadow-sm select-text transition-all duration-500 group
           ${
-            message.messageType === 'image' || message.messageType === 'video'
-              ? 'p-1'
+            message.messageType === 'image' || message.messageType === 'video' || message.messageType === 'sticker'
+              ? message.reaction ? 'p-1 pb-4' : 'p-1'
+              : message.reaction
+              ? 'px-3 pt-1.5 pb-4' // Extra bottom padding to push text/timestamp away from the reaction pill
               : 'px-3 py-1.5'
           }
           ${
@@ -287,13 +349,59 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
           }
         `}
       >
+        {/* Dropdown Menu Trigger Arrow */}
+        {(message.messageType === 'text' || message.messageType === 'text_edited') && (
+          <div className={`absolute top-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 ${
+            isAgent ? 'left-1' : 'right-1'
+          }`}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
+              className="text-gray-400 hover:text-gray-200 transition-smooth p-0.5 rounded"
+            >
+              <svg viewBox="0 0 19 20" width="12" height="12" className="fill-current">
+                <path d="M3.8 6.7l5.7 5.7 5.7-5.7 1.6 1.6-7.3 7.2-7.3-7.2 1.6-1.6z" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Dropdown Menu Panel */}
+        {showMenu && (
+          <div
+            ref={menuRef}
+            className={`absolute top-7 bg-[#233138] border border-[#2F3B43] rounded-lg shadow-xl py-1 z-30 min-w-[110px] overflow-hidden text-left ${
+              isAgent ? 'left-1' : 'right-1'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(message.message);
+                setShowMenu(false);
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-[#E9EDEF] hover:bg-[#182229] transition-smooth flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+              </svg>
+              Copy
+            </button>
+          </div>
+        )}
+
         {/* Message text / media */}
-        {message.messageType === 'image' ? (
-          <div className="relative rounded-md overflow-hidden border border-[#2A3942]/20 cursor-pointer max-w-[280px] bg-[#111B21]">
+        {message.messageType === 'image' || message.messageType === 'sticker' ? (
+          <div className="relative rounded-md overflow-hidden border border-[#2A3942]/20 max-w-[280px] bg-[#111B21] group">
             <img
               src={message.message}
               alt="Sent image"
-              className="w-full h-auto object-cover max-h-[260px] hover:opacity-90 transition-opacity"
+              className="w-full h-auto object-cover max-h-[260px] hover:opacity-90 transition-opacity cursor-pointer"
               onClick={() => {
                 if (typeof window !== 'undefined') {
                   const event = new CustomEvent('open-lightbox', {
@@ -303,6 +411,19 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
                 }
               }}
             />
+            {/* Hover Download Button */}
+            <button
+              type="button"
+              onClick={(e) => handleDownloadImage(e, message.message)}
+              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[#111B21]/80 hover:bg-[#202C33] text-gray-200 hover:text-white flex items-center justify-center shadow-lg transition-smooth opacity-0 group-hover:opacity-100 z-10"
+              title="Download Image"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
           </div>
         ) : message.messageType === 'video' ? (
           <div className="relative rounded-md overflow-hidden border border-[#2A3942]/20 max-w-[280px] bg-[#111B21]">
@@ -312,7 +433,7 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
               className="w-full h-auto max-h-[260px] object-cover"
             />
           </div>
-        ) : message.messageType === 'document' ? (
+        ) : message.messageType === 'document' || message.messageType === 'file' ? (
           <a
             href={message.message}
             target="_blank"
@@ -341,6 +462,13 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
           </a>
         ) : message.messageType === 'audio' ? (
           <VoiceMessagePlayer audioUrl={message.message} />
+        ) : message.messageType === 'reaction' ? (
+          <div className="flex items-center gap-2 py-0.5 select-none">
+            <span className="text-2xl leading-none animate-scale-up">{message.message}</span>
+            <span className="text-[11px] text-gray-400 font-medium">
+              {message.message === 'Reaction removed' ? 'reaction removed' : 'reacted'}
+            </span>
+          </div>
         ) : (
           <p className="text-[14px] text-gray-100 leading-relaxed whitespace-pre-wrap break-words select-text">
             {renderMessageContent(message.message)}
@@ -351,9 +479,24 @@ export function MessageBubble({ message, isHighlighted }: MessageBubbleProps) {
         <div className={`flex items-center justify-end gap-0.5 mt-1 -mb-0.5 select-none ${
           message.messageType === 'image' || message.messageType === 'video' ? 'px-2 pb-1.5' : ''
         }`}>
+          {message.messageType === 'text_edited' && (
+            <span className="text-[9px] text-[#8696A0] mr-1 italic select-none">edited</span>
+          )}
           <span className="text-[10px] text-gray-400">{time}</span>
           {isAgent && getStatusIcon()}
         </div>
+
+        {/* Floating Reaction Pill (WhatsApp Style) */}
+        {message.reaction && (
+          <div 
+            className={`absolute -bottom-2.5 flex items-center justify-center bg-[#202C33] border border-[#2A3942] rounded-full px-1.5 py-0.5 shadow-md select-none animate-scale-up z-10
+              ${isAgent ? 'left-2.5' : 'right-2.5'}
+            `}
+            title={`Reacted ${message.reaction}`}
+          >
+            <span className="text-[13px] leading-none">{message.reaction}</span>
+          </div>
+        )}
       </div>
     </div>
   );
