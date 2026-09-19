@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -66,4 +66,35 @@ model Template {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("inbox_templates")
+}
+
+/// Marketing Broadcast Campaigns
+model BroadcastCampaign {
+  id           String         @id @default(cuid())
+  templateId   String         @map("template_id")
+  templateName String?        @map("template_name")
+  totalCount   Int            @default(0) @map("total_count")
+  successCount Int            @default(0) @map("success_count")
+  failedCount  Int            @default(0) @map("failed_count")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  logs         BroadcastLog[]
+
+  @@map("inbox_broadcast_campaigns")
+}
+
+/// Per-recipient delivery log for broadcast messages
+model BroadcastLog {
+  id           String             @id @default(cuid())
+  campaignId   String?            @map("campaign_id")
+  name         String
+  phone        String
+  status       String             // "submitted" | "failed"
+  messageId    String?            @map("gupshup_message_id")
+  errorMessage String?            @map("error_message")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  campaign     BroadcastCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("inbox_broadcast_logs")
 }

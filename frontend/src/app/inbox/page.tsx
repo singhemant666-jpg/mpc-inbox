@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   getConversations,
   getMessages,
@@ -494,6 +495,15 @@ export default function InboxPage() {
             
             {/* Header Right Actions */}
             <div className="flex items-center gap-1.5 shrink-0">
+              <Link
+                href="/broadcast"
+                className="px-2.5 py-1.5 rounded-lg text-xs bg-[#00A884]/20 text-[#00A884] hover:bg-[#00A884]/30 border border-[#00A884]/40 font-medium flex items-center gap-1.5 transition-colors"
+                title="WhatsApp Marketing Broadcast"
+              >
+                <span>📢</span>
+                <span className="hidden sm:inline">Broadcast</span>
+              </Link>
+
               <button
                 type="button"
                 onClick={handleLogout}

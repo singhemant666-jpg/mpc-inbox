@@ -67,7 +67,7 @@ export class WebhookService {
       });
 
       // Determine file extension from content-type or mediaType
-      const contentType = response.headers['content-type'] || '';
+      const contentType = String(response.headers['content-type'] || '');
       let ext = 'bin';
       if (mediaType === 'audio') {
         ext = contentType.includes('ogg') ? 'ogg' : contentType.includes('mp3') ? 'mp3' : 'ogg';
