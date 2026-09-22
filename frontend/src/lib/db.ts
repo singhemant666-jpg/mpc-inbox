@@ -11,18 +11,24 @@ export function getDatabase() {
   if (dbInstance) return dbInstance;
 
   // Resolve path to backend/prisma/dev.db
-  const possiblePaths = [
-    path.resolve(process.cwd(), '..', 'backend', 'prisma', 'dev.db'),
-    path.resolve(process.cwd(), 'backend', 'prisma', 'dev.db'),
-    path.resolve(process.cwd(), 'prisma', 'dev.db'),
-    'c:/Users/DELL/Documents/mpc inbox/backend/prisma/dev.db',
-  ];
+  let dbPath = process.env.DATABASE_PATH || '';
+  if (!dbPath && process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('file:')) {
+    const raw = process.env.DATABASE_URL.replace('file:', '').trim();
+    dbPath = path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+  }
 
-  let dbPath = '';
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      dbPath = p;
-      break;
+  if (!dbPath) {
+    const possiblePaths = [
+      path.resolve(process.cwd(), '..', 'backend', 'prisma', 'dev.db'),
+      path.resolve(process.cwd(), 'backend', 'prisma', 'dev.db'),
+      path.resolve(process.cwd(), 'prisma', 'dev.db'),
+      path.resolve(process.cwd(), 'dev.db'),
+    ];
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        dbPath = p;
+        break;
+      }
     }
   }
 

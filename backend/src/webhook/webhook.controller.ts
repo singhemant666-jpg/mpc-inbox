@@ -1,9 +1,18 @@
-import { Controller, Post, Body, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
 
 @Controller('webhook')
 export class WebhookController {
   constructor(private webhookService: WebhookService) {}
+
+  /**
+   * GET /api/webhook/gupshup
+   * Simple health check and URL validation endpoint
+   */
+  @Get('gupshup')
+  verifyWebhook() {
+    return { status: 'active', message: 'MPC Gupshup Webhook Endpoint Online' };
+  }
 
   /**
    * POST /api/webhook/gupshup

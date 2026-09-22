@@ -1,0 +1,29 @@
+services:
+  # =========================================================================
+  # Option A (Recommended): Unified Full-Stack Service (Frontend + Backend + DB)
+  # Uses 1 free service (under Render 750 free hours limit)
+  # =========================================================================
+  - type: web
+    name: mpc-inbox
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/webhook/gupshup
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: GUPSHUP_API_KEY
+        value: sk_2c0ed702980c40e8856769f5c725871f
+      - key: GUPSHUP_APP_NAME
+        value: mpcUAT
+      - key: GUPSHUP_SOURCE_NUMBER
+        value: "917304226441"
+      - key: GUPSHUP_APP_ID
+        value: 1b726932-91ca-489f-ba2d-56422a7cfafb
