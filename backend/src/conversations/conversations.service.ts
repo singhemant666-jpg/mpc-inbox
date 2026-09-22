@@ -26,15 +26,6 @@ export class ConversationsService {
 
     const where: any = {};
 
-    // Clinic admins and super admins can view all clinic conversations.
-    // Regular agents only see conversations assigned to them or unassigned.
-    if (userRole !== 'admin' && userRole !== 'super_admin') {
-      where.OR = [
-        { assignedUserId: userId },
-        { assignedUserId: null },
-      ];
-    }
-
     if (search && search.trim()) {
       const q = search.trim();
       const cleanPhone = q.replace(/\D/g, '');
@@ -103,16 +94,8 @@ export class ConversationsService {
   /**
    * Get total unread count across conversations
    */
-  async getTotalUnreadCount(userId: string, userRole?: string) {
-    const where: any = {};
-    if (userRole !== 'admin' && userRole !== 'super_admin') {
-      where.OR = [
-        { assignedUserId: userId },
-        { assignedUserId: null },
-      ];
-    }
+  async getTotalUnreadCount(userId?: string, userRole?: string) {
     const result = await this.prisma.conversation.aggregate({
-      where,
       _sum: { unreadCount: true },
     });
     return { totalUnread: result._sum.unreadCount || 0 };

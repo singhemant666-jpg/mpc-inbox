@@ -369,14 +369,8 @@ function InboxContent() {
           playNotificationSound();
         }
       } else {
-        // Play notification sound and show browser notification
-        // For admins/super admins or conversations assigned to the current user
-        const currentUserRole = userRef.current?.role;
-        const belongsToUser =
-          currentUserRole === 'admin' ||
-          currentUserRole === 'super_admin' ||
-          conversationsRef.current.some((c) => c.id === conversationId);
-        if (message.senderType === 'patient' && belongsToUser) {
+        // Play notification sound and show browser notification for incoming patient messages
+        if (message.senderType === 'patient') {
           playNotificationSound();
           showBrowserNotification(message);
         }
@@ -386,15 +380,6 @@ function InboxContent() {
     socket.on(
       'conversation_updated',
       (event: ConversationUpdatedEvent) => {
-        // Process events for clinic admins, super admins, or conversations assigned to user
-        const currentUserId = userRef.current?.id;
-        const currentUserRole = userRef.current?.role;
-        const isAssignedToMe =
-          currentUserRole === 'admin' ||
-          currentUserRole === 'super_admin' ||
-          event.assignedUserId === currentUserId ||
-          !event.assignedUserId;
-
         setConversations((prev) => {
           const exists = prev.some((c) => c.id === event.id);
           let nextList = [];
@@ -421,11 +406,9 @@ function InboxContent() {
                 new Date(b.lastMessageTime || 0).getTime() -
                 new Date(a.lastMessageTime || 0).getTime(),
             );
-          } else if (isAssignedToMe) {
-            // New conversation assigned to me — add to top
-            nextList = [event as any, ...prev];
           } else {
-            nextList = prev;
+            // New conversation — add to top for all staff accounts
+            nextList = [event as any, ...prev];
           }
 
           // Calculate total unread count on the new list immediately
