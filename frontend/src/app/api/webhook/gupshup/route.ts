@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { updateBroadcastStatus } from '@/lib/db';
+import { updateBroadcastStatus, recordCustomerReply } from '@/lib/db';
+import axios from 'axios';
 
 // Gupshup GET verification check
 export async function GET() {
@@ -10,23 +11,54 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     let body: any;
-    const contentType = req.headers.get('content-type') || '';
+    const text = await req.text();
+    if (!text || !text.trim()) {
+      return new Response('OK', { status: 200 });
+    }
 
-    if (contentType.includes('application/json')) {
-      body = await req.json();
-    } else {
-      const text = await req.text();
-      try {
-        body = JSON.parse(text);
-      } catch {
-        const params = new URLSearchParams(text);
-        body = Object.fromEntries(params.entries());
-      }
+    try {
+      body = JSON.parse(text);
+    } catch {
+      const params = new URLSearchParams(text);
+      body = Object.fromEntries(params.entries());
     }
 
     console.log('📡 [Gupshup Webhook Received]:', JSON.stringify(body).slice(0, 300));
 
-    // Handle Message Status Events: sent, delivered, read, failed
+    // 1. Forward webhook to NestJS Patient Inbox backend on port 3001
+    // This allows conversations, messages, and WebSockets to be created and updated in real-time
+    try {
+      await axios.post('http://localhost:3001/api/webhook/gupshup', body, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000,
+      });
+      console.log('✅ Webhook forwarded to NestJS Patient Inbox backend (3001)');
+    } catch (fwdErr: any) {
+      console.warn('⚠️ Webhook forward to 3001 warning:', fwdErr.message);
+    }
+
+    // 2. Handle Incoming Patient Message (Customer Reply)
+    if (body?.type === 'message' && body.payload) {
+      const msgPayload = body.payload;
+      const senderPhone = msgPayload.source || msgPayload.sender?.phone;
+      const senderName = msgPayload.sender?.name || 'Patient';
+      const text =
+        msgPayload.payload?.text ||
+        msgPayload.text ||
+        msgPayload.payload?.title ||
+        (msgPayload.type ? `[${msgPayload.type} message]` : 'Customer replied');
+
+      if (senderPhone) {
+        console.log(`💬 [Customer Reply Recorded] ${senderPhone} (${senderName}): ${text}`);
+        recordCustomerReply({
+          phone: senderPhone,
+          name: senderName,
+          replyText: text,
+        });
+      }
+    }
+
+    // 3. Handle Message Status Events: sent, delivered, read, failed
     if (body?.type === 'message-event' && body.payload) {
       const eventPayload = body.payload;
       const statusType = eventPayload.type; // 'enqueued', 'sent', 'delivered', 'read', 'failed'

@@ -95,6 +95,18 @@ export async function getTotalUnreadCount(): Promise<{ totalUnread: number }> {
   return data;
 }
 
+export async function initiateConversation(
+  phoneNumber: string,
+  patientName?: string,
+): Promise<Conversation> {
+  const { data } = await api.post<Conversation>('/conversations/initiate', {
+    phoneNumber,
+    patientName,
+  });
+  return data;
+}
+
+
 // ---- Messages ----
 export async function getMessages(
   conversationId: string,

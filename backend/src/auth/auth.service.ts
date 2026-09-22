@@ -82,11 +82,24 @@ export class AuthService implements OnModuleInit {
   }
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const rawEmail = email.toLowerCase().trim();
+    const normalizedEmail = rawEmail.replace('mypainclinic.com', 'mypainclnic.com');
+    const altEmail = rawEmail.replace('mypainclnic.com', 'mypainclinic.com');
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: rawEmail },
+          { email: normalizedEmail },
+          { email: altEmail },
+        ],
+      },
+    });
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {

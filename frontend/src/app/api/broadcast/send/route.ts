@@ -5,6 +5,8 @@ import { saveBroadcastLog } from '@/lib/db';
 export async function POST(req: Request) {
   let cleanPhone = '';
   let customerName = 'Customer';
+  let campaignId: string | undefined;
+  let campaignName: string | undefined;
   try {
     const body = await req.json();
     const {
@@ -16,6 +18,8 @@ export async function POST(req: Request) {
       apiKey = process.env.GUPSHUP_API_KEY || 'sk_2c0ed702980c40e8856769f5c725871f',
       imageUrl,
     } = body;
+    campaignId = body.campaignId;
+    campaignName = body.campaignName;
 
     customerName = name || 'Customer';
 
@@ -34,9 +38,9 @@ export async function POST(req: Request) {
 
     const templatePayload = {
       id: templateId,
-      params: Array.isArray(body.params) && body.params.length > 0
+      params: Array.isArray(body.params)
         ? body.params
-        : [customerName],
+        : (customerName ? [customerName] : []),
     };
 
     const params = new URLSearchParams();
@@ -71,6 +75,8 @@ export async function POST(req: Request) {
     
     // Save to SQLite
     saveBroadcastLog({
+      campaignId: campaignId || undefined,
+      campaignName: campaignName || undefined,
       name: customerName,
       phone: cleanPhone,
       status: isSuccess ? 'submitted' : 'failed',
@@ -96,11 +102,14 @@ export async function POST(req: Request) {
 
     // Save failure to SQLite
     saveBroadcastLog({
+      campaignId: campaignId || undefined,
+      campaignName: campaignName || undefined,
       name: customerName,
       phone: cleanPhone,
       status: 'failed',
       error: typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg,
     });
+
 
     return NextResponse.json(
       {

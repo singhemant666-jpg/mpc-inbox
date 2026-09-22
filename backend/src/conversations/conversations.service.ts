@@ -177,4 +177,49 @@ export class ConversationsService {
 
     return updated;
   }
+
+  /**
+   * Find or create conversation by phone number.
+   * Useful when staff want to open or initiate a chat with a broadcast recipient.
+   */
+  async findOrCreateByPhone(params: {
+    userId: string;
+    phoneNumber: string;
+    patientName?: string;
+  }) {
+    const cleanPhone = params.phoneNumber.replace(/\D/g, '');
+    const altPhone = cleanPhone.startsWith('91') ? cleanPhone.slice(2) : '91' + cleanPhone;
+
+    let conv = await this.prisma.conversation.findFirst({
+      where: {
+        OR: [
+          { phoneNumber: cleanPhone },
+          { phoneNumber: altPhone },
+          { phoneNumber: { contains: cleanPhone.slice(-10) } },
+        ],
+      },
+    });
+
+    if (!conv) {
+      conv = await this.prisma.conversation.create({
+        data: {
+          phoneNumber: cleanPhone,
+          patientName: params.patientName || 'Patient',
+          conversationType: 'existing_patient',
+          assignedUserId: params.userId,
+          unreadCount: 0,
+        },
+      });
+      this.eventsGateway.emitConversationUpdated(conv);
+    } else if (conv.assignedUserId !== params.userId) {
+      conv = await this.prisma.conversation.update({
+        where: { id: conv.id },
+        data: { assignedUserId: params.userId },
+      });
+      this.eventsGateway.emitConversationUpdated(conv);
+    }
+
+    return conv;
+  }
 }
+

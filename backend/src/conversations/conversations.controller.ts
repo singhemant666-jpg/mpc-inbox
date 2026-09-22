@@ -79,4 +79,22 @@ export class ConversationsController {
   async transferToLeads(@Param('id') id: string) {
     return this.conversationsService.transferToLeads(id);
   }
+
+  /**
+   * POST /api/conversations/initiate
+   * Find or initiate conversation by phone number (e.g. from broadcast)
+   */
+  @Post('initiate')
+  async initiate(
+    @Req() req: any,
+    @Body('phoneNumber') phoneNumber: string,
+    @Body('patientName') patientName?: string,
+  ) {
+    return this.conversationsService.findOrCreateByPhone({
+      userId: req.user.sub,
+      phoneNumber,
+      patientName,
+    });
+  }
 }
+

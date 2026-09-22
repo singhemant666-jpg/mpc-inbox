@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
 
-let dbInstance: any = null;
+const nodeRequire = typeof require !== 'undefined' ? require : createRequire(import.meta.url);
+
+const globalForDb = globalThis as unknown as { dbInstance?: any };
+let dbInstance: any = globalForDb.dbInstance || null;
 
 export function getDatabase() {
   if (dbInstance) return dbInstance;
@@ -28,11 +32,17 @@ export function getDatabase() {
 
   try {
     // Use native Node.js 22+ SQLite
-    const { DatabaseSync } = require('node:sqlite');
+    const { DatabaseSync } = nodeRequire('node:sqlite');
     dbInstance = new DatabaseSync(dbPath);
+    globalForDb.dbInstance = dbInstance;
 
-    // Ensure tables exist
+    // High performance configuration for 10k+ concurrent writes & reads
     dbInstance.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA cache_size = -64000; -- 64MB cache
+
       CREATE TABLE IF NOT EXISTS inbox_broadcast_campaigns (
         id TEXT PRIMARY KEY,
         template_id TEXT NOT NULL,
@@ -53,9 +63,28 @@ export function getDatabase() {
         error_message TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Indexes to ensure instant lookups across 10,000+ logs
+      CREATE INDEX IF NOT EXISTS idx_broadcast_logs_phone ON inbox_broadcast_logs(phone);
+      CREATE INDEX IF NOT EXISTS idx_broadcast_logs_gsid ON inbox_broadcast_logs(gupshup_message_id);
+      CREATE INDEX IF NOT EXISTS idx_broadcast_logs_status ON inbox_broadcast_logs(status);
+      CREATE INDEX IF NOT EXISTS idx_broadcast_logs_created ON inbox_broadcast_logs(created_at);
     `);
 
+    // Safely add reply_text and campaign_name columns if not yet existing
+    try {
+      dbInstance.exec(`ALTER TABLE inbox_broadcast_logs ADD COLUMN reply_text TEXT;`);
+    } catch (colErr) {
+      // Column already exists
+    }
+    try {
+      dbInstance.exec(`ALTER TABLE inbox_broadcast_logs ADD COLUMN campaign_name TEXT;`);
+    } catch (colErr) {
+      // Column already exists
+    }
+
     return dbInstance;
+
   } catch (err) {
     console.error('Failed to initialize SQLite database:', err);
     return null;
@@ -69,6 +98,7 @@ export function saveBroadcastLog(data: {
   messageId?: string;
   error?: string;
   campaignId?: string;
+  campaignName?: string;
 }) {
   const db = getDatabase();
   if (!db) return;
@@ -77,14 +107,28 @@ export function saveBroadcastLog(data: {
     const id = 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const now = new Date().toISOString();
 
+    // Ensure parent campaign exists in inbox_broadcast_campaigns to satisfy foreign key constraint
+    if (data.campaignId) {
+      try {
+        const campaignStmt = db.prepare(`
+          INSERT OR IGNORE INTO inbox_broadcast_campaigns (id, template_id, template_name, total_count, created_at)
+          VALUES (?, ?, ?, 0, ?)
+        `);
+        campaignStmt.run(data.campaignId, 'marketing_template', data.campaignName || 'Broadcast Campaign', now);
+      } catch (cErr) {
+        // ignore if already exists
+      }
+    }
+
     const stmt = db.prepare(`
-      INSERT INTO inbox_broadcast_logs (id, campaign_id, name, phone, status, gupshup_message_id, error_message, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO inbox_broadcast_logs (id, campaign_id, campaign_name, name, phone, status, gupshup_message_id, error_message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       id,
       data.campaignId || null,
+      data.campaignName || null,
       data.name,
       data.phone,
       data.status,
@@ -97,18 +141,40 @@ export function saveBroadcastLog(data: {
   }
 }
 
-export function getBroadcastHistory(limit = 100) {
+export function getBroadcastHistory(limit = 100000) {
   const db = getDatabase();
   if (!db) return [];
 
   try {
-    const stmt = db.prepare(`
-      SELECT id, campaign_id as campaignId, name, phone, status, gupshup_message_id as messageId, error_message as error, created_at as createdAt
+    let sql = `
+      SELECT id, campaign_id as campaignId, campaign_name as campaignName, name, phone, status, gupshup_message_id as messageId, error_message as error, reply_text as replyText, created_at as createdAt
       FROM inbox_broadcast_logs
       ORDER BY datetime(created_at) DESC, created_at DESC, id DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    `;
+    let rows: any[];
+    if (limit && limit > 0) {
+      sql += ` LIMIT ?`;
+      rows = db.prepare(sql).all(limit);
+    } else {
+      rows = db.prepare(sql).all();
+    }
+
+    // Normalize replies so customer responses are cleanly separated from system errors
+    return rows.map((r: any) => {
+      let replyText = r.replyText || null;
+      let error = r.error || null;
+
+      if (!replyText && error && /^Reply:\s*"?/i.test(error)) {
+        replyText = error.replace(/^Reply:\s*"?/i, '').replace(/"?$/, '').trim();
+        error = null; // Clean up so customer reply is NEVER treated as an error
+      }
+
+      return {
+        ...r,
+        replyText,
+        error,
+      };
+    });
   } catch (err) {
     console.error('Error reading broadcast logs from SQLite:', err);
     return [];
@@ -165,6 +231,50 @@ export function updateBroadcastStatus(data: {
     return true;
   } catch (err) {
     console.error('Error updating broadcast status in SQLite:', err);
+    return false;
+  }
+}
+
+export function recordCustomerReply(data: {
+  phone: string;
+  name?: string;
+  replyText: string;
+}) {
+  const db = getDatabase();
+  if (!db) return false;
+
+  try {
+    const cleanPhone = String(data.phone).replace(/\D/g, '');
+    const altPhone = cleanPhone.startsWith('91') ? cleanPhone.slice(2) : '91' + cleanPhone;
+    const replyNotice = `Reply: "${data.replyText}"`;
+
+    // Check if there is an existing log for this customer
+    const stmt = db.prepare(`
+      UPDATE inbox_broadcast_logs
+      SET status = 'replied', reply_text = ?, error_message = NULL
+      WHERE id = (
+        SELECT id FROM inbox_broadcast_logs
+        WHERE (phone = ? OR phone = ?)
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+    `);
+    const res = stmt.run(data.replyText, cleanPhone, altPhone);
+
+    // If no broadcast log existed for this phone, insert a new record so staff can see it
+    if (res.changes === 0) {
+      const id = 'rep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      const now = new Date().toISOString();
+      const insertStmt = db.prepare(`
+        INSERT INTO inbox_broadcast_logs (id, campaign_id, name, phone, status, gupshup_message_id, error_message, reply_text, created_at)
+        VALUES (?, NULL, ?, ?, 'replied', NULL, NULL, ?, ?)
+      `);
+      insertStmt.run(id, data.name || 'Patient', cleanPhone, data.replyText, now);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error recording customer reply in SQLite:', err);
     return false;
   }
 }

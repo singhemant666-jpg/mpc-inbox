@@ -4,7 +4,8 @@ import { getBroadcastHistory } from '@/lib/db';
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam, 10) : 100000;
     const logs = getBroadcastHistory(limit);
 
     return NextResponse.json({

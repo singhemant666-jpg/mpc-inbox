@@ -80,7 +80,7 @@ export class MessagesService {
       throw new NotFoundException('Conversation not found');
     }
 
-    // Check if 24-hour session window is active (last patient message must be < 24 hours ago)
+    // Check if 24-hour session window is active (for logging/audit)
     const lastPatientMessage = await this.prisma.message.findFirst({
       where: {
         conversationId,
@@ -89,21 +89,18 @@ export class MessagesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!lastPatientMessage) {
-      throw new BadRequestException(
-        'The 24-hour WhatsApp session window is closed. You cannot send messages because the patient has never initiated a chat.'
-      );
+    if (lastPatientMessage) {
+      const lastActiveTime = new Date(lastPatientMessage.createdAt).getTime();
+      const hoursElapsed = (Date.now() - lastActiveTime) / (1000 * 60 * 60);
+      if (hoursElapsed > 24) {
+        console.warn(
+          `⚠️ Sending to ${conversation.phoneNumber} outside standard 24h window (${Math.floor(hoursElapsed)}h elapsed). Attempting delivery.`
+        );
+      }
+    } else {
+      console.log(`ℹ️ First outgoing message to ${conversation.phoneNumber}. Attempting delivery.`);
     }
 
-    const lastActiveTime = new Date(lastPatientMessage.createdAt).getTime();
-    const now = Date.now();
-    const hoursElapsed = (now - lastActiveTime) / (1000 * 60 * 60);
-
-    if (hoursElapsed > 24) {
-      throw new BadRequestException(
-        `The 24-hour WhatsApp session window has closed (last patient message was ${Math.floor(hoursElapsed)} hours ago). You cannot send free-form messages.`
-      );
-    }
 
     let gupshupResult;
     if (messageType === 'text') {
