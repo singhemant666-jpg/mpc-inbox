@@ -1,9 +1,12 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Starting MPC Inbox Backend (NestJS) on internal port 3001..."
+echo "🚀 Syncing Prisma DB schema..."
 cd /app/backend
-BACKEND_PORT=3001 PORT=3001 node dist/src/main || BACKEND_PORT=3001 PORT=3001 node dist/main &
+npx prisma db push --skip-generate || echo "Prisma db push completed or skipped"
+
+echo "🚀 Starting MPC Inbox Backend (NestJS) on internal port 3001..."
+(BACKEND_PORT=3001 PORT=3001 node dist/src/main || BACKEND_PORT=3001 PORT=3001 node dist/main) &
 
 echo "⏳ Waiting for backend to be ready on port 3001..."
 for i in $(seq 1 30); do

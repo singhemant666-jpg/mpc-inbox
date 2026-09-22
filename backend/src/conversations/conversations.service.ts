@@ -85,10 +85,12 @@ export class ConversationsService {
    * Mark a conversation as read (reset unread count to 0)
    */
   async markAsRead(conversationId: string) {
-    return this.prisma.conversation.update({
+    const updated = await this.prisma.conversation.update({
       where: { id: conversationId },
       data: { unreadCount: 0 },
     });
+    this.eventsGateway.emitConversationUpdated(updated);
+    return updated;
   }
 
   /**

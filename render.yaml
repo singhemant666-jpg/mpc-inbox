@@ -20,9 +20,9 @@ services:
       - key: JWT_EXPIRATION
         value: 24h
       - key: DATABASE_URL
-        value: file:./dev.db
-      - key: DATABASE_PATH
-        value: /app/backend/prisma/dev.db
+        value: postgresql://postgres.pnmndmrmzokhtdchrgyh:sahilsingh1%40@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+      - key: DIRECT_URL
+        value: postgresql://postgres.pnmndmrmzokhtdchrgyh:sahilsingh1%40@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
       - key: ADMIN_EMAIL
         value: admin@mypainclnic.com
       - key: ADMIN_PASSWORD
