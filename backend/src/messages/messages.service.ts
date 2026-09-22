@@ -35,15 +35,18 @@ export class MessagesService {
     const [messages, total] = await Promise.all([
       this.prisma.message.findMany({
         where: { conversationId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
       this.prisma.message.count({ where: { conversationId } }),
     ]);
 
+    // Reverse to chronological order (oldest to newest) for chat rendering
+    const chronologicalMessages = messages.reverse();
+
     return {
-      data: messages,
+      data: chronologicalMessages,
       conversation: {
         id: conversation.id,
         patientName: conversation.patientName,

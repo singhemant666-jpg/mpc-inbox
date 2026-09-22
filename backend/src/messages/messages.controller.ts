@@ -47,7 +47,7 @@ export class MessagesController {
     return this.messagesService.findByConversation({
       conversationId,
       page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 50,
+      limit: limit ? parseInt(limit, 10) : 100,
     });
   }
 

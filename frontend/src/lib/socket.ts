@@ -11,7 +11,7 @@ export function getSocket(): Socket {
     socket = io(WS_URL || undefined, {
       autoConnect: false,
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       path: '/socket.io/',

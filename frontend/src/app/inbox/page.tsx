@@ -190,6 +190,31 @@ function InboxContent() {
     }
   }, []);
 
+  // ---- Silently sync messages without flickering or wiping active chat ----
+  const syncMessagesSilently = useCallback(async (conversationId: string) => {
+    try {
+      const result = await getMessages(conversationId, { limit: 100 });
+      const processed = processReactions(result.data);
+      setMessages((prev) => {
+        const map = new Map<string, Message>();
+        for (const m of prev) {
+          map.set(m.id, m);
+        }
+        for (const m of processed) {
+          map.set(m.id, m);
+        }
+        const merged = Array.from(map.values());
+        merged.sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+        return processReactions(merged);
+      });
+    } catch (err) {
+      // Ignore background sync errors
+    }
+  }, []);
+
   // ---- Select conversation ----
   const handleSelectConversation = useCallback(
     async (conversation: Conversation) => {
@@ -257,8 +282,14 @@ function InboxContent() {
       setSendingMessage(true);
       setSendError(null);
       try {
-        await sendMessage(selectedConversation.id, text, messageType);
-        // The Socket.IO event will update the UI in real-time
+        const res = await sendMessage(selectedConversation.id, text, messageType);
+        // Optimistically ensure message is in local messages state
+        if (res?.message) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === res.message.id)) return prev;
+            return processReactions([...prev, res.message]);
+          });
+        }
       } catch (err: any) {
         console.warn('Send message notice:', err?.response?.data?.message || err?.message);
         const errMsg = err.response?.data?.message || 'Failed to send message. Please try again.';
@@ -414,19 +445,56 @@ function InboxContent() {
       );
     });
 
-    socket.on('message_deleted', (event: { id: string; conversationId: string }) => {
-      if (selectedConvRef.current === event.conversationId) {
-        setMessages((prev) => prev.filter((m) => m.id !== event.id));
+    socket.on('connect', () => {
+      loadConversations(searchQuery || undefined);
+      if (selectedConvRef.current) {
+        syncMessagesSilently(selectedConvRef.current);
       }
     });
+
+    socket.on('reconnect', () => {
+      loadConversations(searchQuery || undefined);
+      if (selectedConvRef.current) {
+        syncMessagesSilently(selectedConvRef.current);
+      }
+    });
+
+    // Auto-sync when tab gains focus or user switches back
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        connectSocket();
+        loadConversations(searchQuery || undefined);
+        if (selectedConvRef.current) {
+          syncMessagesSilently(selectedConvRef.current);
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+
+    // Periodic silent sync every 8 seconds to ensure state never desyncs
+    const syncInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadConversations(searchQuery || undefined);
+        if (selectedConvRef.current) {
+          syncMessagesSilently(selectedConvRef.current);
+        }
+      }
+    }, 8000);
 
     return () => {
       socket.off('new_message');
       socket.off('conversation_updated');
       socket.off('message_status');
+      socket.off('connect');
+      socket.off('reconnect');
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      clearInterval(syncInterval);
       disconnectSocket();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadConversations, syncMessagesSilently]);
 
   // ---- Notification helpers ----
   const playNotificationSound = () => {
