@@ -10,7 +10,8 @@ interface ConversationListProps {
   selectedId: string | null;
   loading: boolean;
   searchQuery: string;
-  onSearchChange: (query: string) => void;
+  totalUnread?: number;
+  onSearchChange: (q: string) => void;
   onSelect: (conversation: Conversation) => void;
 }
 
@@ -19,16 +20,30 @@ export function ConversationList({
   selectedId,
   loading,
   searchQuery,
+  totalUnread,
   onSearchChange,
   onSelect,
 }: ConversationListProps) {
   const [activeFilter, setActiveFilter] = useState('All');
 
+  // Count unread conversations and total unread messages
+  const unreadChatsCount = conversations.filter(
+    (c) => Number(c.unreadCount) > 0,
+  ).length;
+  const unreadBadgeCount =
+    typeof totalUnread === 'number' && totalUnread > 0
+      ? totalUnread
+      : unreadChatsCount;
+
   // Filter conversations based on selected category (e.g. Unread) and active search query
   const filteredConversations = conversations.filter((c) => {
     // 1. Category filter
     if (activeFilter === 'Unread') {
-      if (!(Number(c.unreadCount) > 0)) return false;
+      const isSelected = Boolean(selectedId && c.id === selectedId);
+      // Show chats with unread messages, or currently open chat so it does not vanish
+      if (!(Number(c.unreadCount) > 0) && !isSelected) {
+        return false;
+      }
     }
 
     // 2. Search query filter (instant client-side filtering)
@@ -80,18 +95,32 @@ export function ConversationList({
       <div className="px-3 py-1 flex gap-2 overflow-x-auto bg-[#111B21] no-scrollbar shrink-0 select-none">
         {['All', 'Unread', 'Favourites', 'Groups'].map((filter) => {
           const isActive = activeFilter === filter;
+          const isUnread = filter === 'Unread';
           return (
             <button
               key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-smooth whitespace-nowrap
+              onClick={() => {
+                if (isActive && filter !== 'All') {
+                  setActiveFilter('All');
+                } else {
+                  setActiveFilter(filter);
+                }
+              }}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-smooth whitespace-nowrap flex items-center gap-1.5
                 ${
                   isActive
                     ? 'bg-[#0A332C] text-[#00A884]'
                     : 'bg-[#202C33] text-[#8696A0] hover:bg-[#374248]/70'
                 }`}
             >
-              {filter}
+              <span>{filter}</span>
+              {isUnread && unreadBadgeCount > 0 && (
+                <span
+                  className="min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold flex items-center justify-center bg-[#00A884] text-[#111B21]"
+                >
+                  {unreadBadgeCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -147,13 +176,27 @@ export function ConversationList({
               </svg>
             </div>
             <p className="text-gray-400 text-sm font-medium">
-              {searchQuery ? 'No conversations found' : 'No conversations yet'}
+              {searchQuery
+                ? 'No conversations found'
+                : activeFilter === 'Unread'
+                ? 'No unread chats'
+                : 'No conversations yet'}
             </p>
             <p className="text-gray-500 text-xs mt-1">
               {searchQuery
                 ? 'Try a different search term'
+                : activeFilter === 'Unread'
+                ? "You've read all your messages"
                 : 'Messages from patients will appear here'}
             </p>
+            {activeFilter === 'Unread' && (
+              <button
+                onClick={() => setActiveFilter('All')}
+                className="mt-4 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-[#202C33] text-[#00A884] hover:bg-[#2A3942] transition-smooth"
+              >
+                View all chats
+              </button>
+            )}
           </div>
         ) : (
           // Conversation items

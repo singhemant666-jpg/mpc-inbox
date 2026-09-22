@@ -639,6 +639,7 @@ function InboxContent() {
             selectedId={selectedConversation?.id || null}
             loading={loadingConversations}
             searchQuery={searchQuery}
+            totalUnread={totalUnread}
             onSearchChange={setSearchQuery}
             onSelect={handleSelectConversation}
           />
