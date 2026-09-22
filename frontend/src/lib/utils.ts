@@ -12,32 +12,53 @@ export function cn(...inputs: ClassValue[]) {
  * This week: "Monday"
  * Older: "12/25/2025"
  */
-export function formatConversationTime(dateStr: string | null): string {
+export function formatConversationTime(dateStr: string | null | undefined): string {
   if (!dateStr) return '';
 
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (isNaN(date.getTime())) return '';
 
-  if (diffDays === 0) {
-    // Same day — show time
+  const now = new Date();
+
+  // Normalize to local calendar day (midnight comparison)
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  if (isToday) {
     return date.toLocaleTimeString('en-IN', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
     });
-  } else if (diffDays === 1) {
-    return 'Yesterday';
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString('en-IN', { weekday: 'long' });
-  } else {
-    return date.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
   }
+
+  // Check Yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    date.getDate() === yesterday.getDate() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getFullYear() === yesterday.getFullYear();
+
+  if (isYesterday) {
+    return 'Yesterday';
+  }
+
+  // Check if within the last 6 days (same week)
+  const diffTime = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays >= 0 && diffDays < 7) {
+    return date.toLocaleDateString('en-IN', { weekday: 'long' });
+  }
+
+  // Older than a week
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
 /**

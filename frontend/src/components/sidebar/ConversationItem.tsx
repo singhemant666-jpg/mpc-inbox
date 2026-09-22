@@ -39,7 +39,9 @@ export function ConversationItem({
   const initials = getInitials(conversation.patientName);
   const avatarColor = getAvatarColor(conversation.patientName);
   const hasUnread = conversation.unreadCount > 0;
-  const timeStr = formatConversationTime(conversation.lastMessageTime);
+  const timeStr = formatConversationTime(
+    conversation.lastMessageTime || conversation.createdAt,
+  );
 
   return (
     <button
