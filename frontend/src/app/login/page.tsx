@@ -18,12 +18,6 @@ export default function LoginPage() {
 
     try {
       const data = await login(email, password);
-      
-      if (data.user.role === 'super_admin') {
-        setError('Access Denied. Please use the dedicated Super Admin URL.');
-        setLoading(false);
-        return;
-      }
 
       localStorage.setItem('inbox_token', data.access_token);
       localStorage.setItem('inbox_user', JSON.stringify(data.user));

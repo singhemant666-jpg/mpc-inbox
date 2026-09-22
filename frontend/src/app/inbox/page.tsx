@@ -121,10 +121,6 @@ function InboxContent() {
 
       try {
         const parsedUser = JSON.parse(localUser!);
-        if (parsedUser.role === 'super_admin') {
-          router.replace('/inbox/super-admin');
-          return;
-        }
         setUser(parsedUser);
       } catch (e) {
         router.replace('/login');
@@ -564,6 +560,19 @@ function InboxContent() {
             
             {/* Header Right Actions */}
             <div className="flex items-center gap-1.5 shrink-0">
+              {user?.role === 'super_admin' && (
+                <Link
+                  href="/super-admin"
+                  className="px-2.5 py-1.5 rounded-lg text-xs bg-[#00A884]/20 border border-[#00A884]/40 text-[#00A884] hover:bg-[#00A884]/30 hover:text-white transition-smooth flex items-center gap-1"
+                  title="Super Admin Panel"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  Admin Panel
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
