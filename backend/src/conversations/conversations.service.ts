@@ -16,23 +16,48 @@ export class ConversationsService {
    */
   async findAll(params: {
     userId: string;
+    userRole?: string;
     search?: string;
     page?: number;
     limit?: number;
   }) {
-    const { userId, search, page = 1, limit = 50 } = params;
+    const { userId, userRole, search, page = 1, limit = 100 } = params;
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      assignedUserId: userId,
-    };
+    const where: any = {};
 
-    if (search) {
+    // Clinic admins and super admins can view all clinic conversations.
+    // Regular agents only see conversations assigned to them or unassigned.
+    if (userRole !== 'admin' && userRole !== 'super_admin') {
       where.OR = [
-        { patientName: { contains: search, mode: 'insensitive' } },
-        { phoneNumber: { contains: search } },
-        { lastMessage: { contains: search, mode: 'insensitive' } },
+        { assignedUserId: userId },
+        { assignedUserId: null },
       ];
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      const cleanPhone = q.replace(/\D/g, '');
+      const searchConditions: any[] = [
+        { patientName: { contains: q } },
+        { phoneNumber: { contains: q } },
+        { lastMessage: { contains: q } },
+        { messages: { some: { message: { contains: q } } } },
+      ];
+
+      if (cleanPhone && cleanPhone.length >= 3) {
+        searchConditions.push({ phoneNumber: { contains: cleanPhone } });
+      }
+
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchConditions },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     const [conversations, total] = await Promise.all([
@@ -76,11 +101,18 @@ export class ConversationsService {
   }
 
   /**
-   * Get total unread count across conversations assigned to the given user
+   * Get total unread count across conversations
    */
-  async getTotalUnreadCount(userId: string) {
+  async getTotalUnreadCount(userId: string, userRole?: string) {
+    const where: any = {};
+    if (userRole !== 'admin' && userRole !== 'super_admin') {
+      where.OR = [
+        { assignedUserId: userId },
+        { assignedUserId: null },
+      ];
+    }
     const result = await this.prisma.conversation.aggregate({
-      where: { assignedUserId: userId },
+      where,
       _sum: { unreadCount: true },
     });
     return { totalUnread: result._sum.unreadCount || 0 };

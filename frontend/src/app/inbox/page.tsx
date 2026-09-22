@@ -147,15 +147,21 @@ function InboxContent() {
   // ---- Load conversations ----
   const loadConversations = useCallback(async (search?: string) => {
     try {
-      const result = await getConversations({ search, limit: 100 });
+      const [result, unreadRes] = await Promise.all([
+        getConversations({ search, limit: 100 }),
+        getTotalUnreadCount().catch(() => ({ totalUnread: 0 })),
+      ]);
       setConversations(result.data);
 
-      // Calculate total unread
-      const unread = result.data.reduce(
-        (sum, c) => sum + c.unreadCount,
-        0,
-      );
-      setTotalUnread(unread);
+      if (unreadRes && typeof unreadRes.totalUnread === 'number') {
+        setTotalUnread(unreadRes.totalUnread);
+      } else {
+        const unread = result.data.reduce(
+          (sum, c) => sum + (Number(c.unreadCount) || 0),
+          0,
+        );
+        setTotalUnread(unread);
+      }
     } catch (err) {
       console.error('Failed to load conversations:', err);
     } finally {
@@ -337,10 +343,12 @@ function InboxContent() {
         }
       } else {
         // Play notification sound and show browser notification
-        // Only if this conversation belongs to the current user
-        const belongsToUser = conversationsRef.current.some(
-          (c) => c.id === conversationId,
-        );
+        // For admins/super admins or conversations assigned to the current user
+        const currentUserRole = userRef.current?.role;
+        const belongsToUser =
+          currentUserRole === 'admin' ||
+          currentUserRole === 'super_admin' ||
+          conversationsRef.current.some((c) => c.id === conversationId);
         if (message.senderType === 'patient' && belongsToUser) {
           playNotificationSound();
           showBrowserNotification(message);
@@ -351,10 +359,14 @@ function InboxContent() {
     socket.on(
       'conversation_updated',
       (event: ConversationUpdatedEvent) => {
-        // Only process events for conversations assigned to the current user
+        // Process events for clinic admins, super admins, or conversations assigned to user
         const currentUserId = userRef.current?.id;
+        const currentUserRole = userRef.current?.role;
         const isAssignedToMe =
-          event.assignedUserId === currentUserId;
+          currentUserRole === 'admin' ||
+          currentUserRole === 'super_admin' ||
+          event.assignedUserId === currentUserId ||
+          !event.assignedUserId;
 
         setConversations((prev) => {
           const exists = prev.some((c) => c.id === event.id);

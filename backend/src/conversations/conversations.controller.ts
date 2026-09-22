@@ -29,9 +29,10 @@ export class ConversationsController {
   ) {
     return this.conversationsService.findAll({
       userId: req.user.sub,
+      userRole: req.user.role,
       search,
       page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 50,
+      limit: limit ? parseInt(limit, 10) : 100,
     });
   }
 
@@ -41,7 +42,7 @@ export class ConversationsController {
    */
   @Get('unread-count')
   async getUnreadCount(@Req() req: any) {
-    return this.conversationsService.getTotalUnreadCount(req.user.sub);
+    return this.conversationsService.getTotalUnreadCount(req.user.sub, req.user.role);
   }
 
   /**

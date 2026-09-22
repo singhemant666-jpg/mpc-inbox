@@ -24,11 +24,29 @@ export function ConversationList({
 }: ConversationListProps) {
   const [activeFilter, setActiveFilter] = useState('All');
 
-  // Filter conversations based on selected category (e.g. Unread)
+  // Filter conversations based on selected category (e.g. Unread) and active search query
   const filteredConversations = conversations.filter((c) => {
+    // 1. Category filter
     if (activeFilter === 'Unread') {
-      return c.unreadCount > 0;
+      if (!(Number(c.unreadCount) > 0)) return false;
     }
+
+    // 2. Search query filter (instant client-side filtering)
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const cleanQ = q.replace(/\D/g, '');
+      const nameMatch = c.patientName && c.patientName.toLowerCase().includes(q);
+      const phoneClean = (c.phoneNumber || '').replace(/\D/g, '');
+      const phoneMatch =
+        (c.phoneNumber && c.phoneNumber.toLowerCase().includes(q)) ||
+        (cleanQ.length > 0 && phoneClean.includes(cleanQ));
+      const msgMatch = c.lastMessage && c.lastMessage.toLowerCase().includes(q);
+
+      if (!nameMatch && !phoneMatch && !msgMatch) {
+        return false;
+      }
+    }
+
     return true;
   });
 
