@@ -19,6 +19,16 @@ services:
         generateValue: true
       - key: DATABASE_URL
         value: file:./dev.db
+      - key: DATABASE_PATH
+        value: /app/backend/prisma/dev.db
+      - key: ADMIN_EMAIL
+        value: admin@mypainclnic.com
+      - key: ADMIN_PASSWORD
+        value: admin123
+      - key: SUPER_ADMIN_EMAIL
+        value: superadminmpc@gmail.com
+      - key: SUPER_ADMIN_PASSWORD
+        value: superadmin
       - key: GUPSHUP_API_KEY
         value: sk_2c0ed702980c40e8856769f5c725871f
       - key: GUPSHUP_APP_NAME
