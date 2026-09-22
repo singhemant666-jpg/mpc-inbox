@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -67,5 +68,59 @@ export class UsersService {
     });
 
     return { success: true, message: 'Password updated successfully' };
+  }
+
+  async update(userId: string, dto: UpdateUserDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const data: any = {};
+
+    if (dto.name && dto.name.trim()) {
+      data.name = dto.name.trim();
+    }
+
+    if (dto.email && dto.email.trim()) {
+      const cleanEmail = dto.email.toLowerCase().trim();
+      if (cleanEmail !== user.email) {
+        const existing = await this.prisma.user.findUnique({
+          where: { email: cleanEmail },
+        });
+        if (existing && existing.id !== userId) {
+          throw new BadRequestException('Email address is already in use by another account');
+        }
+        data.email = cleanEmail;
+      }
+    }
+
+    if (dto.password && dto.password.trim()) {
+      data.password = await bcrypt.hash(dto.password.trim(), 12);
+    }
+
+    if (dto.role) {
+      data.role = dto.role;
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Account updated successfully',
+      user: updated,
+    };
   }
 }

@@ -195,4 +195,12 @@ export async function changeUserPassword(userId: string, password: string): Prom
   return data;
 }
 
+export async function updateUser(
+  userId: string,
+  userData: { name?: string; email?: string; password?: string; role?: string },
+): Promise<any> {
+  const { data } = await api.patch<any>(`/users/${userId}`, userData);
+  return data;
+}
+
 export default api;
