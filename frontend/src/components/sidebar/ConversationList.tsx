@@ -13,6 +13,7 @@ interface ConversationListProps {
   totalUnread?: number;
   onSearchChange: (q: string) => void;
   onSelect: (conversation: Conversation) => void;
+  onDeleteConversation?: (conversation: Conversation) => void;
 }
 
 export function ConversationList({
@@ -23,6 +24,7 @@ export function ConversationList({
   totalUnread,
   onSearchChange,
   onSelect,
+  onDeleteConversation,
 }: ConversationListProps) {
   const [activeFilter, setActiveFilter] = useState('All');
 
@@ -207,6 +209,7 @@ export function ConversationList({
                 conversation={conversation}
                 isSelected={conversation.id === selectedId}
                 onClick={() => onSelect(conversation)}
+                onDelete={() => onDeleteConversation?.(conversation)}
                 index={index}
               />
             ))}

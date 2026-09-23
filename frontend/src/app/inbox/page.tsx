@@ -8,6 +8,7 @@ import {
   getMessages,
   sendMessage,
   markAsRead,
+  deleteConversation,
   getTotalUnreadCount,
   convertConversationToPatient,
   transferConversationToLeads,
@@ -89,6 +90,8 @@ function InboxContent() {
   const [totalUnread, setTotalUnread] = useState(0);
   const [isMobileShowChat, setIsMobileShowChat] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const selectedConvRef = useRef<string | null>(null);
   const userRef = useRef<User | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
@@ -345,7 +348,39 @@ function InboxContent() {
     }
   }, [selectedConversation]);
 
+  // ---- Delete conversation handler ----
+  const confirmDeleteConversation = async () => {
+    if (!conversationToDelete) return;
+    const target = conversationToDelete;
+    setIsDeleting(true);
 
+    try {
+      await deleteConversation(target.id);
+
+      // Optimistically update conversation list
+      setConversations((prev) => prev.filter((c) => c.id !== target.id));
+
+      // If active conversation was deleted, clear chat pane
+      if (selectedConvRef.current === target.id) {
+        setSelectedConversation(null);
+        selectedConvRef.current = null;
+        setMessages([]);
+        setIsMobileShowChat(false);
+      }
+
+      // Deduct unread count if it had unread messages
+      if (target.unreadCount > 0) {
+        setTotalUnread((prev) => Math.max(0, prev - target.unreadCount));
+      }
+
+      setConversationToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+      alert('Failed to delete conversation. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // ---- Socket.IO real-time events ----
   useEffect(() => {
@@ -428,6 +463,16 @@ function InboxContent() {
       );
     });
 
+    socket.on('conversation_deleted', ({ conversationId }: { conversationId: string }) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (selectedConvRef.current === conversationId) {
+        setSelectedConversation(null);
+        selectedConvRef.current = null;
+        setMessages([]);
+        setIsMobileShowChat(false);
+      }
+    });
+
     socket.on('connect', () => {
       loadConversations(searchQuery || undefined);
       if (selectedConvRef.current) {
@@ -469,6 +514,7 @@ function InboxContent() {
     return () => {
       socket.off('new_message');
       socket.off('conversation_updated');
+      socket.off('conversation_deleted');
       socket.off('message_status');
       socket.off('connect');
       socket.off('reconnect');
@@ -642,6 +688,7 @@ function InboxContent() {
             totalUnread={totalUnread}
             onSearchChange={setSearchQuery}
             onSelect={handleSelectConversation}
+            onDeleteConversation={(conv) => setConversationToDelete(conv)}
           />
         </div>
 
@@ -660,10 +707,78 @@ function InboxContent() {
             onBack={handleMobileBack}
             onConvert={handleConvertConversation}
             onTransferToLeads={handleTransferToLeads}
+            onDeleteConversation={() =>
+              selectedConversation && setConversationToDelete(selectedConversation)
+            }
             sendError={sendError}
           />
         </div>
       </div>
+
+      {/* Delete Conversation Confirmation Modal */}
+      {conversationToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#202C33] border border-[#2A3942] rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">Delete chat?</h3>
+                <p className="text-xs text-[#8696A0] mt-0.5">
+                  {conversationToDelete.patientName} ({conversationToDelete.phoneNumber})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-[#D1D7DB] leading-relaxed">
+              Are you sure you want to delete this chat? All messages and media in this conversation will be permanently removed. This action cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConversationToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-[#111B21] text-[#E9EDEF] hover:bg-[#374248]/50 transition-smooth disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteConversation}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-[#EA4335] text-white hover:bg-[#D93025] transition-smooth disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Delete Chat</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

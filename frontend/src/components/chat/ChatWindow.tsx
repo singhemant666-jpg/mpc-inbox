@@ -13,6 +13,7 @@ interface ChatWindowProps {
   onBack: () => void;
   onConvert?: () => void;
   onTransferToLeads?: () => void;
+  onDeleteConversation?: () => void;
   sendError?: string | null;
 }
 
@@ -25,6 +26,7 @@ export function ChatWindow({
   onBack,
   onConvert,
   onTransferToLeads,
+  onDeleteConversation,
   sendError,
 }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -149,6 +151,7 @@ export function ChatWindow({
           onSearchClick={() => setShowSearch(!showSearch)}
           onConvert={onConvert}
           onTransferToLeads={onTransferToLeads}
+          onDeleteConversation={onDeleteConversation}
         />
 
         {/* Messages Area */}

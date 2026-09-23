@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Query,
   UseGuards,
@@ -96,6 +97,15 @@ export class ConversationsController {
       phoneNumber,
       patientName,
     });
+  }
+
+  /**
+   * DELETE /api/conversations/:id
+   * Delete a conversation and all its messages
+   */
+  @Delete(':id')
+  async deleteConversation(@Param('id') id: string) {
+    return this.conversationsService.deleteConversation(id);
   }
 }
 

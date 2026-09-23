@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { Conversation } from '@/types';
 import { getInitials } from '@/lib/utils';
 
@@ -9,6 +10,7 @@ interface ChatHeaderProps {
   onSearchClick?: () => void;
   onConvert?: () => void;
   onTransferToLeads?: () => void;
+  onDeleteConversation?: () => void;
 }
 
 const AVATAR_COLORS = [
@@ -30,7 +32,15 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-export function ChatHeader({ conversation, onBack, onSearchClick, onConvert, onTransferToLeads }: ChatHeaderProps) {
+export function ChatHeader({
+  conversation,
+  onBack,
+  onSearchClick,
+  onConvert,
+  onTransferToLeads,
+  onDeleteConversation,
+}: ChatHeaderProps) {
+  const [showMenu, setShowMenu] = useState(false);
   const initials = getInitials(conversation.patientName);
   const avatarColor = getAvatarColor(conversation.patientName);
 
@@ -89,7 +99,7 @@ export function ChatHeader({ conversation, onBack, onSearchClick, onConvert, onT
       </div>
 
       {/* Right Side Header Controls */}
-      <div className="flex items-center gap-4 text-[#AEBAC1]">
+      <div className="flex items-center gap-2 text-[#AEBAC1]">
         {/* Convert Button (Only show if this is a new lead) */}
         {conversation.conversationType === 'new_lead' && onConvert && (
           <button
@@ -145,7 +155,7 @@ export function ChatHeader({ conversation, onBack, onSearchClick, onConvert, onT
         {/* Search Icon */}
         <button
           onClick={onSearchClick}
-          className="hover:text-white transition-smooth p-1 hover:bg-[#374248]/40 rounded-full"
+          className="hover:text-white transition-smooth p-1.5 hover:bg-[#374248]/40 rounded-full"
           title="Search messages"
         >
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
@@ -153,12 +163,82 @@ export function ChatHeader({ conversation, onBack, onSearchClick, onConvert, onT
           </svg>
         </button>
 
-        {/* Menu Dots */}
-        <button className="hover:text-white transition-smooth" title="Menu">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-          </svg>
-        </button>
+        {/* Delete Chat Button (Header Shortcut) */}
+        {onDeleteConversation && (
+          <button
+            onClick={onDeleteConversation}
+            className="hover:text-[#F15C6D] transition-smooth p-1.5 hover:bg-[#F15C6D]/10 rounded-full"
+            title="Delete this conversation"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+        )}
+
+        {/* Menu Dots & Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu((prev) => !prev)}
+            className="hover:text-white transition-smooth p-1.5 hover:bg-[#374248]/40 rounded-full"
+            title="More options"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+            </svg>
+          </button>
+
+          {showMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowMenu(false)}
+              />
+              <div className="absolute right-0 top-full mt-2 w-48 bg-[#233138] rounded-xl shadow-xl border border-[#2A3942]/60 py-1.5 z-50">
+                {onDeleteConversation && (
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      onDeleteConversation();
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-[#F15C6D] hover:bg-[#111B21]/60 transition-smooth flex items-center gap-2.5 font-medium"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    </svg>
+                    Delete chat
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

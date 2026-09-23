@@ -238,5 +238,26 @@ export class ConversationsService {
 
     return conv;
   }
+
+  /**
+   * Permanently delete a conversation and all its associated messages.
+   * Emits conversation_deleted event to sync all connected staff browsers.
+   */
+  async deleteConversation(id: string) {
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id },
+    });
+
+    if (!conv) {
+      throw new NotFoundException(`Conversation with ID ${id} not found`);
+    }
+
+    await this.prisma.conversation.delete({
+      where: { id },
+    });
+
+    this.eventsGateway.emitConversationDeleted(id);
+    return { success: true, id };
+  }
 }
 

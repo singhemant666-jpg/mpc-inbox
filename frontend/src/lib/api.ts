@@ -88,6 +88,11 @@ export async function markAsRead(conversationId: string) {
   return data;
 }
 
+export async function deleteConversation(id: string): Promise<{ success: boolean; id: string }> {
+  const { data } = await api.delete<{ success: boolean; id: string }>(`/conversations/${id}`);
+  return data;
+}
+
 export async function getTotalUnreadCount(): Promise<{ totalUnread: number }> {
   const { data } = await api.get<{ totalUnread: number }>(
     '/conversations/unread-count',

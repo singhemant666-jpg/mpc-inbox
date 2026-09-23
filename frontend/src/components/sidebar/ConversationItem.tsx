@@ -7,6 +7,7 @@ interface ConversationItemProps {
   conversation: Conversation;
   isSelected: boolean;
   onClick: () => void;
+  onDelete?: (e: React.MouseEvent) => void;
   index: number;
 }
 
@@ -34,6 +35,7 @@ export function ConversationItem({
   conversation,
   isSelected,
   onClick,
+  onDelete,
   index,
 }: ConversationItemProps) {
   const initials = getInitials(conversation.patientName);
@@ -46,7 +48,7 @@ export function ConversationItem({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-150 text-left border-b border-[#222E35]/60
+      className={`w-full group relative flex items-center gap-3 px-4 py-3 transition-all duration-150 text-left border-b border-[#222E35]/60
         ${
           isSelected
             ? 'bg-[#2A3942]'
@@ -70,13 +72,42 @@ export function ConversationItem({
           >
             {conversation.patientName}
           </span>
-          <span
-            className={`text-xs shrink-0 ml-2 ${
-              hasUnread ? 'text-[#00A884] font-medium' : 'text-[#8696A0]'
-            }`}
-          >
-            {timeStr}
-          </span>
+          <div className="flex items-center gap-1 shrink-0 ml-2">
+            <span
+              className={`text-xs ${
+                hasUnread ? 'text-[#00A884] font-medium' : 'text-[#8696A0]'
+              }`}
+            >
+              {timeStr}
+            </span>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(e);
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#8696A0] hover:text-[#F15C6D] hover:bg-red-500/10 rounded-full"
+                title="Delete chat"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 min-w-0">

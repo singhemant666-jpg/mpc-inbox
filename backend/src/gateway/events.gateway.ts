@@ -61,4 +61,13 @@ export class EventsGateway
       status,
     });
   }
+
+  /**
+   * Emit a conversation deleted event
+   */
+  emitConversationDeleted(conversationId: string) {
+    this.server.emit('conversation_deleted', {
+      conversationId,
+    });
+  }
 }
