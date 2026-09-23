@@ -8,6 +8,7 @@ interface ConversationItemProps {
   isSelected: boolean;
   onClick: () => void;
   onDelete?: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   index: number;
 }
 
@@ -36,6 +37,7 @@ export function ConversationItem({
   isSelected,
   onClick,
   onDelete,
+  onContextMenu,
   index,
 }: ConversationItemProps) {
   const initials = getInitials(conversation.patientName);
@@ -48,6 +50,12 @@ export function ConversationItem({
   return (
     <button
       onClick={onClick}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          e.preventDefault();
+          onContextMenu(e);
+        }
+      }}
       className={`w-full group relative flex items-center gap-3 px-4 py-3 transition-all duration-150 text-left border-b border-[#222E35]/60
         ${
           isSelected
@@ -72,7 +80,7 @@ export function ConversationItem({
           >
             {conversation.patientName}
           </span>
-          <div className="flex items-center gap-1 shrink-0 ml-2">
+          <div className="flex items-center gap-1.5 shrink-0 ml-2">
             <span
               className={`text-xs ${
                 hasUnread ? 'text-[#00A884] font-medium' : 'text-[#8696A0]'
@@ -80,6 +88,22 @@ export function ConversationItem({
             >
               {timeStr}
             </span>
+            {/* Real WhatsApp Chevron Dropdown Trigger on Hover */}
+            {onContextMenu && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onContextMenu(e);
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-[#8696A0] hover:text-[#E9EDEF] rounded-full"
+                title="Options"
+              >
+                <svg viewBox="0 0 19 20" width="14" height="14" fill="currentColor">
+                  <path d="M3.8 6.7l5.7 5.7 5.7-5.7 1.6 1.6-7.3 7.3-7.3-7.3 1.6-1.6z"/>
+                </svg>
+              </button>
+            )}
             {onDelete && (
               <button
                 type="button"

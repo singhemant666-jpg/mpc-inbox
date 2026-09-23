@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Conversation } from '@/types';
 import { ConversationItem } from './ConversationItem';
 import { SearchBar } from './SearchBar';
+
+interface ContextMenuPosition {
+  x: number;
+  y: number;
+  conversation: Conversation;
+}
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -27,6 +33,46 @@ export function ConversationList({
   onDeleteConversation,
 }: ConversationListProps) {
   const [activeFilter, setActiveFilter] = useState('All');
+  const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
+
+  // Close context menu on outside click, escape, or resize
+  useEffect(() => {
+    const handleClose = () => setContextMenu(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+
+    if (contextMenu) {
+      window.addEventListener('click', handleClose);
+      window.addEventListener('contextmenu', handleClose);
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('resize', handleClose);
+    }
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('contextmenu', handleClose);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [contextMenu]);
+
+  const handleOpenContextMenu = (e: React.MouseEvent, conversation: Conversation) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const menuWidth = 220;
+    const menuHeight = 240;
+    const x = Math.min(
+      e.clientX,
+      typeof window !== 'undefined' ? window.innerWidth - menuWidth - 10 : e.clientX,
+    );
+    const y = Math.min(
+      e.clientY,
+      typeof window !== 'undefined' ? window.innerHeight - menuHeight - 10 : e.clientY,
+    );
+
+    setContextMenu({ x, y, conversation });
+  };
 
   // Count unread conversations and total unread messages
   const unreadChatsCount = conversations.filter(
@@ -144,7 +190,10 @@ export function ConversationList({
       </div>
 
       {/* Conversation List */}
-      <div className="flex-1 overflow-y-auto border-t border-[#2A3942]/40">
+      <div
+        onScroll={() => setContextMenu(null)}
+        className="flex-1 overflow-y-auto border-t border-[#2A3942]/40"
+      >
         {loading ? (
           // Skeleton loading
           <div className="p-2 space-y-1">
@@ -210,12 +259,107 @@ export function ConversationList({
                 isSelected={conversation.id === selectedId}
                 onClick={() => onSelect(conversation)}
                 onDelete={() => onDeleteConversation?.(conversation)}
+                onContextMenu={(e) => handleOpenContextMenu(e, conversation)}
                 index={index}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* Real WhatsApp Context Menu on Right Click */}
+      {contextMenu && (
+        <div
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+          className="fixed z-50 w-56 bg-[#233138] border border-[#2A3942]/80 rounded-2xl shadow-2xl py-1.5 text-[#E9EDEF] text-sm select-none animate-scale-in"
+        >
+          {/* Archive chat */}
+          <button
+            type="button"
+            onClick={() => setContextMenu(null)}
+            className="w-full px-4 py-2.5 flex items-center gap-3.5 hover:bg-[#111B21]/60 text-left transition-colors font-normal"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" className="text-[#8696A0]">
+              <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.01 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.49-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm8-6h-2v-3H9l3-3 3 3h-2v3z"/>
+            </svg>
+            <span>Archive chat</span>
+          </button>
+
+          {/* Mute notifications */}
+          <button
+            type="button"
+            onClick={() => setContextMenu(null)}
+            className="w-full px-4 py-2.5 flex items-center gap-3.5 hover:bg-[#111B21]/60 text-left transition-colors font-normal"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" className="text-[#8696A0]">
+              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
+            </svg>
+            <span>Mute notifications</span>
+          </button>
+
+          {/* Pin chat */}
+          <button
+            type="button"
+            onClick={() => setContextMenu(null)}
+            className="w-full px-4 py-2.5 flex items-center gap-3.5 hover:bg-[#111B21]/60 text-left transition-colors font-normal"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" className="text-[#8696A0]">
+              <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+            </svg>
+            <span>Pin chat</span>
+          </button>
+
+          {/* Mark as unread / read */}
+          <button
+            type="button"
+            onClick={() => {
+              const conv = contextMenu.conversation;
+              setContextMenu(null);
+              onSelect(conv);
+            }}
+            className="w-full px-4 py-2.5 flex items-center gap-3.5 hover:bg-[#111B21]/60 text-left transition-colors font-normal"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" className="text-[#8696A0]">
+              <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+            </svg>
+            <span>{contextMenu.conversation.unreadCount > 0 ? 'Mark as read' : 'Mark as unread'}</span>
+          </button>
+
+          {/* Divider */}
+          <div className="border-t border-[#2A3942]/60 my-1" />
+
+          {/* Delete chat (Red danger item) */}
+          <button
+            type="button"
+            onClick={() => {
+              const conv = contextMenu.conversation;
+              setContextMenu(null);
+              onDeleteConversation?.(conv);
+            }}
+            className="w-full px-4 py-2.5 flex items-center gap-3.5 hover:bg-[#111B21]/80 text-[#F15C6D] text-left transition-colors font-medium cursor-pointer"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+            <span>Delete chat</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
