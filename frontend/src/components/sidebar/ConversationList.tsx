@@ -258,7 +258,6 @@ export function ConversationList({
                 conversation={conversation}
                 isSelected={conversation.id === selectedId}
                 onClick={() => onSelect(conversation)}
-                onDelete={() => onDeleteConversation?.(conversation)}
                 onContextMenu={(e) => handleOpenContextMenu(e, conversation)}
                 index={index}
               />
