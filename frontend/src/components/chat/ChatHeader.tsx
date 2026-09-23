@@ -44,10 +44,15 @@ export function ChatHeader({
   const initials = getInitials(conversation.patientName);
   const avatarColor = getAvatarColor(conversation.patientName);
 
-  // Format phone for display: +91 98765 43210
+  // Format phone for display: +91 9876543210 (no space between number digits)
   const formatPhone = (phone: string) => {
-    if (phone.length >= 12) {
-      return `+${phone.slice(0, 2)} ${phone.slice(2, 7)} ${phone.slice(7)}`;
+    if (!phone) return '';
+    const clean = phone.replace(/\D/g, '');
+    if (clean.length >= 12) {
+      return `+${clean.slice(0, 2)} ${clean.slice(2)}`;
+    }
+    if (clean.length === 10) {
+      return `+91 ${clean}`;
     }
     return phone;
   };
