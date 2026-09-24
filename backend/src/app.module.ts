@@ -8,9 +8,12 @@ import { GatewayModule } from './gateway/gateway.module';
 import { TemplatesModule } from './templates/templates.module';
 import { UsersModule } from './users/users.module';
 
+import { StorageModule } from './storage/storage.module';
+
 @Module({
   imports: [
     PrismaModule,
+    StorageModule,
     AuthModule,
     WebhookModule,
     ConversationsModule,

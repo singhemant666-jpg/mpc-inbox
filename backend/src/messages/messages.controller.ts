@@ -29,10 +29,15 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
+import { StorageService } from '../storage/storage.service';
+
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class MessagesController {
-  constructor(private messagesService: MessagesService) {}
+  constructor(
+    private messagesService: MessagesService,
+    private storageService: StorageService,
+  ) {}
 
   /**
    * GET /api/conversations/:id/messages
@@ -88,9 +93,27 @@ export class MessagesController {
       throw new BadRequestException('No file uploaded');
     }
 
-    const host = req.get('host');
-    const protocol = req.protocol;
-    const fileUrl = `${protocol}://${host}/public/uploads/${file.filename}`;
+    let fileUrl = '';
+    try {
+      const fileBuffer = fs.readFileSync(file.path);
+      const uploadedUrl = await this.storageService.uploadBuffer(
+        fileBuffer,
+        file.filename,
+        file.mimetype,
+      );
+
+      if (uploadedUrl.startsWith('/')) {
+        const host = req.get('host');
+        const protocol = req.protocol;
+        fileUrl = `${protocol}://${host}${uploadedUrl}`;
+      } else {
+        fileUrl = uploadedUrl;
+      }
+    } catch {
+      const host = req.get('host');
+      const protocol = req.protocol;
+      fileUrl = `${protocol}://${host}/public/uploads/${file.filename}`;
+    }
 
     return {
       url: fileUrl,

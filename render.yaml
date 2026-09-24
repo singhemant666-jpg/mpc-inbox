@@ -23,6 +23,12 @@ services:
         value: postgresql://postgres.pnmndmrmzokhtdchrgyh:sahilsingh1%40@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true
       - key: DIRECT_URL
         value: postgresql://postgres.pnmndmrmzokhtdchrgyh:sahilsingh1%40@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+      - key: SUPABASE_URL
+        value: https://pnmndmrmzokhtdchrgyh.supabase.co
+      - key: SUPABASE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBubW5kbXJtem9raHRkY2hyZ3loIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNTc0NTYsImV4cCI6MjEwNTYzMzQ1Nn0.fvF_ST8kqjPMCrwFHXOh4or5a_kTAGIxi-vcrNcY0wQ
+      - key: SUPABASE_STORAGE_BUCKET
+        value: chat-media
       - key: ADMIN_EMAIL
         value: admin@mypainclnic.com
       - key: ADMIN_PASSWORD

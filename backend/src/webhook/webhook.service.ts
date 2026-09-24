@@ -25,11 +25,14 @@ function isNewLead(messageText: string): boolean {
   );
 }
 
+import { StorageService } from '../storage/storage.service';
+
 @Injectable()
 export class WebhookService {
   constructor(
     private prisma: PrismaService,
     private eventsGateway: EventsGateway,
+    private storageService: StorageService,
   ) {}
 
   /**
@@ -50,54 +53,14 @@ export class WebhookService {
   }
 
   /**
-   * Download media from a Gupshup URL and store it locally.
-   * Returns the local URL path (e.g., /public/uploads/1234567890-audio.ogg)
-   * Falls back to the original URL if download fails.
+   * Download media from a Gupshup URL and store it permanently in Supabase Storage.
+   * Falls back to local disk or original URL if download fails.
    */
   private async downloadAndStoreMedia(
     externalUrl: string,
     mediaType: string,
   ): Promise<string> {
-    try {
-      if (!externalUrl) return externalUrl;
-
-      const response = await axios.get(externalUrl, {
-        responseType: 'arraybuffer',
-        timeout: 30000,
-      });
-
-      // Determine file extension from content-type or mediaType
-      const contentType = String(response.headers['content-type'] || '');
-      let ext = 'bin';
-      if (mediaType === 'audio') {
-        ext = contentType.includes('ogg') ? 'ogg' : contentType.includes('mp3') ? 'mp3' : 'ogg';
-      } else if (mediaType === 'image') {
-        ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-      } else if (mediaType === 'video') {
-        ext = contentType.includes('mp4') ? 'mp4' : 'mp4';
-      } else if (mediaType === 'document' || mediaType === 'file') {
-        // Try to extract extension from URL
-        const urlPath = new URL(externalUrl).pathname;
-        const urlExt = path.extname(urlPath).replace('.', '');
-        ext = urlExt || 'pdf';
-      } else if (mediaType === 'sticker') {
-        ext = 'webp';
-      }
-
-      const filename = `${Date.now()}-${Math.round(Math.random() * 1e6)}-${mediaType}.${ext}`;
-      const filepath = path.join(UPLOAD_DIR, filename);
-
-      fs.writeFileSync(filepath, Buffer.from(response.data));
-
-      console.log(`💾 Media saved locally: ${filepath} (${(response.data.byteLength / 1024).toFixed(1)} KB)`);
-
-      // Return a relative URL that the frontend can access via the static file server
-      return `/public/uploads/${filename}`;
-    } catch (error) {
-      console.error(`⚠️ Failed to download media (${mediaType}):`, error.message);
-      // Fall back to the original Gupshup URL (may expire)
-      return externalUrl;
-    }
+    return this.storageService.uploadFromUrl(externalUrl, mediaType);
   }
 
   /**
