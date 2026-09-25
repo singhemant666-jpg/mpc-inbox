@@ -76,12 +76,17 @@ export async function POST(req: Request) {
 
       console.log(`📊 [Webhook Status Update] ${destination || gsId || wamid} -> ${statusType}`);
 
+      const eventTimestamp = eventPayload.timestamp
+        ? new Date(eventPayload.timestamp).toISOString()
+        : new Date().toISOString();
+
       updateBroadcastStatus({
         messageId: wamid,
         gsId: gsId,
         phone: destination,
         status: statusType,
         error: errorMsg,
+        timestamp: eventTimestamp,
       });
     }
 
@@ -95,6 +100,7 @@ export async function POST(req: Request) {
           phone: body.destination,
           status: statusType,
           error: body.reason || body.error,
+          timestamp: new Date().toISOString(),
         });
       }
     }

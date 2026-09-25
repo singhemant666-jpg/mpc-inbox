@@ -33,7 +33,12 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Bell,
+  BellOff,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
+import { getSocket, connectSocket } from '@/lib/socket';
 
 // Bulletproof Excel download helper that ensures proper MIME type, clean filename, and .xlsx extension in all browsers
 function downloadWorkbookAsExcel(wb: XLSX.WorkBook, filename: string) {
@@ -106,6 +111,51 @@ export default function BroadcastPage() {
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
   const [historyFilter, setHistoryFilter] = useState<'all' | 'replies' | 'read' | 'delivered' | 'failed'>('all');
+
+  // Real-time Sound & New Read Notification State (Broadcast Panel only)
+  const [readSoundEnabled, setReadSoundEnabled] = useState<boolean>(true);
+  const [newReadAlert, setNewReadAlert] = useState<{ name: string; phone: string; time: string } | null>(null);
+  const knownReadIdsRef = useRef<Set<string>>(new Set());
+  const isInitialHistoryLoadRef = useRef<boolean>(true);
+
+  // Instant notification chime sound using Web Audio API
+  const playReadSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const now = ctx.currentTime;
+
+      // Note 1: 880Hz (A5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.2, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // Note 2: 1318.51Hz (E6) Harmonious high chime
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1318.51, now + 0.08);
+      gain2.gain.setValueAtTime(0.25, now + 0.08);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.5);
+    } catch (e) {
+      console.warn('Audio play error:', e);
+    }
+  };
 
   // Broadcast Campaign Name & Confirmation Modal
   const [broadcastCampaignName, setBroadcastCampaignName] = useState<string>('');
@@ -252,14 +302,47 @@ export default function BroadcastPage() {
       const data = await res.json();
       if (data.success && Array.isArray(data.logs)) {
         const sorted = [...data.logs].sort((a: any, b: any) => {
-          const tA = new Date(a.createdAt).getTime() || 0;
-          const tB = new Date(b.createdAt).getTime() || 0;
+          const tA = new Date(a.readAt || a.createdAt).getTime() || 0;
+          const tB = new Date(b.readAt || b.createdAt).getTime() || 0;
           return tB - tA;
         });
+
+        // Detect new customer reads to trigger instant notification sound
+        if (!isInitialHistoryLoadRef.current) {
+          let latestNewReader: any = null;
+          for (const item of sorted) {
+            const itemKey = item.id || item.messageId || item.phone;
+            if (item.status === 'read' && itemKey && !knownReadIdsRef.current.has(itemKey)) {
+              knownReadIdsRef.current.add(itemKey);
+              latestNewReader = item;
+            }
+          }
+          if (latestNewReader) {
+            if (readSoundEnabled) {
+              playReadSound();
+            }
+            setNewReadAlert({
+              name: latestNewReader.name || 'Patient',
+              phone: latestNewReader.phone || '',
+              time: latestNewReader.readAt
+                ? new Date(latestNewReader.readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            });
+          }
+        } else {
+          // Initialize existing read IDs on initial load
+          sorted.forEach((item: any) => {
+            if (item.status === 'read') {
+              const itemKey = item.id || item.messageId || item.phone;
+              if (itemKey) knownReadIdsRef.current.add(itemKey);
+            }
+          });
+          isInitialHistoryLoadRef.current = false;
+        }
+
         setHistoryLogs(sorted);
       }
     } catch (e) {
-      // Only log errors on explicit (non-silent) fetches to avoid console spam
       if (!silent) console.error('Error fetching SQLite history:', e);
     } finally {
       if (!silent) setLoadingHistory(false);
@@ -272,13 +355,79 @@ export default function BroadcastPage() {
     fetchTemplatesList();
   }, []);
 
-  // Real-time polling for webhook status updates (delivered, read, failed)
+  // Real-time WebSocket listener for instant read receipt events (ONLY in Broadcast Panel)
+  useEffect(() => {
+    connectSocket();
+    const socket = getSocket();
+
+    const onBroadcastStatus = (event: {
+      messageId?: string;
+      gsId?: string;
+      phone?: string;
+      status: string;
+      readAt?: string;
+      timestamp?: string;
+    }) => {
+      if (event.status === 'read') {
+        const readTimestamp = event.readAt || event.timestamp || new Date().toISOString();
+        const targetId = event.messageId || event.gsId;
+        const targetPhone = event.phone ? event.phone.replace(/\D/g, '').slice(-10) : '';
+
+        const eventKey = targetId || targetPhone;
+        if (eventKey && !knownReadIdsRef.current.has(eventKey)) {
+          knownReadIdsRef.current.add(eventKey);
+          if (readSoundEnabled) {
+            playReadSound();
+          }
+          setNewReadAlert({
+            name: 'Patient',
+            phone: event.phone || '',
+            time: new Date(readTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          });
+        }
+
+        // Instantly update historyLogs in memory without waiting for next poll
+        setHistoryLogs((prev) => {
+          return prev.map((log) => {
+            const matchesId = targetId && (log.messageId === targetId || log.id === targetId);
+            const matchesPhone = targetPhone && (log.phone || '').replace(/\D/g, '').endsWith(targetPhone);
+            if (matchesId || matchesPhone) {
+              return {
+                ...log,
+                status: 'read',
+                readAt: readTimestamp,
+              };
+            }
+            return log;
+          });
+        });
+      }
+    };
+
+    socket.on('broadcast_status', onBroadcastStatus);
+
+    return () => {
+      socket.off('broadcast_status', onBroadcastStatus);
+    };
+  }, [readSoundEnabled]);
+
+  // Real-time background sync every 3 seconds for updates
   useEffect(() => {
     const interval = setInterval(() => {
       fetchHistory(true);
-    }, 5000);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-dismiss new read alert banner after 6 seconds
+  useEffect(() => {
+    if (newReadAlert) {
+      const timer = setTimeout(() => {
+        setNewReadAlert(null);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [newReadAlert]);
 
   // Helper to validate and clean phone numbers
   const formatPhone = (raw: string): { formatted: string; isValid: boolean } => {
@@ -876,6 +1025,33 @@ export default function BroadcastPage() {
         </div>
       </header>
 
+      {/* Floating Instant Read Notification Alert (Broadcast Panel Only) */}
+      {newReadAlert && (
+        <div className="fixed top-5 right-5 z-50 bg-[#1F2C34] border-2 border-sky-400 rounded-xl p-3.5 shadow-2xl shadow-sky-950/90 flex items-center gap-3 max-w-sm animate-pulse">
+          <div className="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-400 flex items-center justify-center shrink-0">
+            <Eye className="w-5 h-5 text-sky-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>Customer Read Your Message!</span>
+              <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
+            </div>
+            <div className="text-[11px] text-sky-300 font-mono truncate">
+              {newReadAlert.name} ({newReadAlert.phone})
+            </div>
+            <div className="text-[10px] text-gray-400 mt-0.5">
+              Read at {newReadAlert.time}
+            </div>
+          </div>
+          <button
+            onClick={() => setNewReadAlert(null)}
+            className="text-gray-400 hover:text-white p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Main Content Dashboard */}
       <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 pb-28">
         {/* Left Column: Upload & Audience Management (7 Cols) */}
@@ -1007,6 +1183,41 @@ export default function BroadcastPage() {
                     <RefreshCw className={`w-3.5 h-3.5 text-[#00A884] ${loadingHistory ? 'animate-spin' : ''}`} />
                     <span>Refresh SQLite</span>
                   </button>
+
+                  {/* Sound Alert Toggle & Test Button */}
+                  <div className="flex items-center gap-1 bg-[#202C33] border border-[#2A3942] rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setReadSoundEnabled((prev) => !prev)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                        readSoundEnabled
+                          ? 'bg-sky-950 text-sky-300 border border-sky-500/80 shadow-sm shadow-sky-950/60'
+                          : 'bg-transparent text-gray-400 hover:text-gray-200'
+                      }`}
+                      title={readSoundEnabled ? 'Read notification sound is ON' : 'Read notification sound is MUTED'}
+                    >
+                      {readSoundEnabled ? (
+                        <>
+                          <Bell className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
+                          <span>Sound: ON</span>
+                        </>
+                      ) : (
+                        <>
+                          <BellOff className="w-3.5 h-3.5 text-gray-500" />
+                          <span>Sound: OFF</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={playReadSound}
+                      className="px-2 py-1 rounded text-[11px] font-medium text-gray-300 hover:text-white hover:bg-[#2A3942] transition-colors flex items-center gap-1"
+                      title="Test Read Notification Sound"
+                    >
+                      <Volume2 className="w-3 h-3 text-sky-400" />
+                      <span>Test</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 contacts.length > 0 && (
@@ -1237,10 +1448,18 @@ export default function BroadcastPage() {
                                     </Link>
                                   </div>
                                 ) : log.status === 'read' ? (
-                                  <span className="text-[11px] bg-sky-950/90 text-sky-200 px-2.5 py-1 rounded-md border border-sky-400/80 flex items-center gap-1.5 w-fit font-bold shadow-sm shadow-sky-950/60">
-                                    <Eye className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                                    <span>Read by Patient</span>
-                                  </span>
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <span className="text-[11px] bg-sky-950/90 text-sky-200 px-2.5 py-1 rounded-md border border-sky-400/80 flex items-center gap-1.5 w-fit font-bold shadow-sm shadow-sky-950/60">
+                                      <Eye className="w-3.5 h-3.5 text-sky-400 shrink-0 animate-pulse" />
+                                      <span>Read by Patient</span>
+                                    </span>
+                                    {log.readAt && (
+                                      <span className="text-[10px] text-sky-300 font-mono bg-sky-950/50 border border-sky-800/40 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                                        Read: {new Date(log.readAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+                                      </span>
+                                    )}
+                                  </div>
                                 ) : log.status === 'delivered' ? (
                                   <span className="text-[11px] bg-teal-950/80 text-teal-300 px-2.5 py-1 rounded-md border border-teal-600/70 flex items-center gap-1.5 w-fit font-semibold shadow-sm shadow-teal-950/40">
                                     <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
@@ -1294,8 +1513,41 @@ export default function BroadcastPage() {
                                 <span className="text-gray-600">—</span>
                               )}
                             </td>
-                            <td className="p-3 text-right text-[11px] text-gray-400">
-                              {log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}
+                            <td className="p-3 text-right text-[11px]">
+                              {log.status === 'read' ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  {/* Distinct Glowing Read Time Badge */}
+                                  <div className="bg-sky-950/90 border border-sky-400/70 rounded-lg px-2.5 py-1 text-right shadow-md shadow-sky-950/60">
+                                    <div className="text-[10px] uppercase tracking-wider text-sky-400 font-bold flex items-center justify-end gap-1">
+                                      <Eye className="w-3 h-3 text-sky-400 shrink-0" />
+                                      Read Time
+                                    </div>
+                                    <div className="text-xs font-bold text-white font-mono leading-tight mt-0.5">
+                                      {log.readAt
+                                        ? new Date(log.readAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+                                        : new Date(log.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                    </div>
+                                    <div className="text-[9px] text-sky-300/80 font-sans">
+                                      {log.readAt
+                                        ? new Date(log.readAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                                        : new Date(log.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </div>
+                                  </div>
+                                  {/* Sent Time Reference */}
+                                  <span className="text-[10px] text-gray-500 font-sans">
+                                    Sent: {log.createdAt ? new Date(log.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-end">
+                                  <span className="text-gray-300 font-medium">
+                                    {log.createdAt ? new Date(log.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}
+                                  </span>
+                                  <span className="text-[10px] text-gray-500">
+                                    {log.createdAt ? new Date(log.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                                  </span>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );

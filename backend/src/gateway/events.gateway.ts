@@ -70,4 +70,18 @@ export class EventsGateway
       conversationId,
     });
   }
+
+  /**
+   * Emit a broadcast message status update event (sent, delivered, read, failed)
+   */
+  emitBroadcastStatus(data: {
+    messageId?: string;
+    gsId?: string;
+    phone?: string;
+    status: string;
+    readAt?: string;
+    timestamp?: string;
+  }) {
+    this.server.emit('broadcast_status', data);
+  }
 }

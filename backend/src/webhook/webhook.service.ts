@@ -357,5 +357,15 @@ export class WebhookService {
       // Emit status update via Socket.IO
       this.eventsGateway.emitMessageStatus(message.id, status);
     }
+
+    // Always emit broadcast status update for the Broadcast Panel real-time tracking
+    this.eventsGateway.emitBroadcastStatus({
+      messageId: eventPayload.id,
+      gsId: eventPayload.gsId,
+      phone: eventPayload.destination,
+      status,
+      readAt: status === 'read' ? (eventPayload.timestamp ? new Date(eventPayload.timestamp).toISOString() : new Date().toISOString()) : undefined,
+      timestamp: eventPayload.timestamp ? new Date(eventPayload.timestamp).toISOString() : new Date().toISOString(),
+    });
   }
 }

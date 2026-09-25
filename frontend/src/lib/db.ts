@@ -77,7 +77,7 @@ export function getDatabase() {
       CREATE INDEX IF NOT EXISTS idx_broadcast_logs_created ON inbox_broadcast_logs(created_at);
     `);
 
-    // Safely add reply_text and campaign_name columns if not yet existing
+    // Safely add reply_text, campaign_name, and read_at columns if not yet existing
     try {
       dbInstance.exec(`ALTER TABLE inbox_broadcast_logs ADD COLUMN reply_text TEXT;`);
     } catch (colErr) {
@@ -85,6 +85,11 @@ export function getDatabase() {
     }
     try {
       dbInstance.exec(`ALTER TABLE inbox_broadcast_logs ADD COLUMN campaign_name TEXT;`);
+    } catch (colErr) {
+      // Column already exists
+    }
+    try {
+      dbInstance.exec(`ALTER TABLE inbox_broadcast_logs ADD COLUMN read_at TEXT;`);
     } catch (colErr) {
       // Column already exists
     }
@@ -153,7 +158,7 @@ export function getBroadcastHistory(limit = 100000) {
 
   try {
     let sql = `
-      SELECT id, campaign_id as campaignId, campaign_name as campaignName, name, phone, status, gupshup_message_id as messageId, error_message as error, reply_text as replyText, created_at as createdAt
+      SELECT id, campaign_id as campaignId, campaign_name as campaignName, name, phone, status, gupshup_message_id as messageId, error_message as error, reply_text as replyText, created_at as createdAt, read_at as readAt
       FROM inbox_broadcast_logs
       ORDER BY datetime(created_at) DESC, created_at DESC, id DESC
     `;
@@ -179,6 +184,7 @@ export function getBroadcastHistory(limit = 100000) {
         ...r,
         replyText,
         error,
+        readAt: r.readAt || null,
       };
     });
   } catch (err) {
@@ -193,22 +199,26 @@ export function updateBroadcastStatus(data: {
   phone?: string;
   status: string;
   error?: string;
+  timestamp?: string;
 }) {
   const db = getDatabase();
   if (!db) return false;
 
   try {
     const ids = [data.messageId, data.gsId].filter(Boolean);
+    const readTimestamp = data.status === 'read' ? (data.timestamp || new Date().toISOString()) : null;
     let updated = false;
 
     if (ids.length > 0) {
       for (const id of ids) {
         const stmt = db.prepare(`
           UPDATE inbox_broadcast_logs
-          SET status = ?, error_message = COALESCE(?, error_message)
+          SET status = ?, 
+              error_message = COALESCE(?, error_message),
+              read_at = CASE WHEN ? = 'read' THEN COALESCE(?, read_at, CURRENT_TIMESTAMP) ELSE read_at END
           WHERE gupshup_message_id = ?
         `);
-        const res = stmt.run(data.status, data.error || null, id);
+        const res = stmt.run(data.status, data.error || null, data.status, readTimestamp, id);
         if (res.changes > 0) {
           updated = true;
           break;
@@ -223,7 +233,10 @@ export function updateBroadcastStatus(data: {
       const altPhone = cleanPhone.startsWith('91') ? cleanPhone.slice(2) : '91' + cleanPhone;
       const stmt = db.prepare(`
         UPDATE inbox_broadcast_logs
-        SET status = ?, error_message = COALESCE(?, error_message), gupshup_message_id = COALESCE(?, gupshup_message_id)
+        SET status = ?, 
+            error_message = COALESCE(?, error_message), 
+            gupshup_message_id = COALESCE(?, gupshup_message_id),
+            read_at = CASE WHEN ? = 'read' THEN COALESCE(?, read_at, CURRENT_TIMESTAMP) ELSE read_at END
         WHERE id = (
           SELECT id FROM inbox_broadcast_logs
           WHERE (phone = ? OR phone = ?)
@@ -231,7 +244,7 @@ export function updateBroadcastStatus(data: {
           LIMIT 1
         )
       `);
-      stmt.run(data.status, data.error || null, data.messageId || data.gsId || null, cleanPhone, altPhone);
+      stmt.run(data.status, data.error || null, data.messageId || data.gsId || null, data.status, readTimestamp, cleanPhone, altPhone);
     }
 
     return true;
