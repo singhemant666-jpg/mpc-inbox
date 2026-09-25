@@ -301,9 +301,10 @@ export default function BroadcastPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.logs)) {
+        // Sort strictly by createdAt DESC so the latest broadcast campaign messages stay at the top
         const sorted = [...data.logs].sort((a: any, b: any) => {
-          const tA = new Date(a.readAt || a.createdAt).getTime() || 0;
-          const tB = new Date(b.readAt || b.createdAt).getTime() || 0;
+          const tA = new Date(a.createdAt).getTime() || 0;
+          const tB = new Date(b.createdAt).getTime() || 0;
           return tB - tA;
         });
 
@@ -390,7 +391,8 @@ export default function BroadcastPage() {
         setHistoryLogs((prev) => {
           return prev.map((log) => {
             const matchesId = targetId && (log.messageId === targetId || log.id === targetId);
-            const matchesPhone = targetPhone && (log.phone || '').replace(/\D/g, '').endsWith(targetPhone);
+            // Only fallback to phone if no message ID match, AND do not overwrite existing replies
+            const matchesPhone = !targetId && targetPhone && (log.phone || '').replace(/\D/g, '').endsWith(targetPhone) && log.status !== 'replied' && !log.replyText;
             if (matchesId || matchesPhone) {
               return {
                 ...log,
@@ -601,6 +603,7 @@ export default function BroadcastPage() {
       `Broadcast_${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).replace(/\s+/g, '_')}`;
 
     const currentCampaignId = 'camp_' + Date.now();
+    setSelectedCampaignId(currentCampaignId);
 
     setShowConfirmBroadcastModal(false);
     setIsBroadcasting(true);
@@ -949,7 +952,19 @@ export default function BroadcastPage() {
     });
     if (historySearch.trim()) {
       const q = historySearch.toLowerCase().trim();
-      list = list.filter((l) => (l.name && l.name.toLowerCase().includes(q)) || (l.phone && l.phone.includes(q)));
+      list = list.filter((l) =>
+        (l.name && l.name.toLowerCase().includes(q)) ||
+        (l.phone && l.phone.includes(q)) ||
+        (l.messageId && l.messageId.toLowerCase().includes(q))
+      );
+    }
+    // When viewing 'Read by Patient', show the latest reads at the top of the read list
+    if (historyFilter === 'read') {
+      return [...list].sort((a, b) => {
+        const tA = new Date(a.readAt || a.createdAt).getTime() || 0;
+        const tB = new Date(b.readAt || b.createdAt).getTime() || 0;
+        return tB - tA;
+      });
     }
     return list;
   }, [campaignFilteredLogs, historyFilter, historySearch]);
@@ -1256,10 +1271,20 @@ export default function BroadcastPage() {
                         </option>
                         {campaigns.map((c) => (
                           <option key={c.id} value={c.id} className="bg-[#111B21] text-white">
-                            {c.label} ({c.total} sent, {c.replied} replied)
+                            {c.label} ({c.total} sent • {c.read} read • {c.replied} replied)
                           </option>
                         ))}
                       </select>
+                      {selectedCampaignId !== 'all' && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCampaignId('all')}
+                          className="text-[10px] text-gray-400 hover:text-white underline ml-1 cursor-pointer"
+                          title="Show all campaigns combined"
+                        >
+                          View All
+                        </button>
+                      )}
                     </div>
 
                     {/* Right: History Filter Pills */}
@@ -1397,7 +1422,7 @@ export default function BroadcastPage() {
                       </thead>
                       <tbody className="divide-y divide-[#2A3942]/60">
                         {paginatedHistoryLogs.map((log: any) => {
-                          const isReplied = log.status === 'replied' || !!log.replyText;
+                          const isReplied = log.status === 'replied' || (historyFilter === 'replies' && !!log.replyText);
                           const replyMessage = log.replyText || (log.error && /^Reply:\s*"?/i.test(log.error) ? log.error.replace(/^Reply:\s*"?/i, '').replace(/"?$/, '').trim() : '');
 
                           return (
@@ -1457,6 +1482,12 @@ export default function BroadcastPage() {
                                       <span className="text-[10px] text-sky-300 font-mono bg-sky-950/50 border border-sky-800/40 px-1.5 py-0.5 rounded flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
                                         Read: {new Date(log.readAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+                                      </span>
+                                    )}
+                                    {log.replyText && (
+                                      <span className="text-[10px] text-emerald-300 font-medium bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded flex items-center gap-1 mt-0.5" title={log.replyText}>
+                                        <MessageSquare className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                                        <span className="truncate max-w-[220px]">Replied: &ldquo;{log.replyText}&rdquo;</span>
                                       </span>
                                     )}
                                   </div>

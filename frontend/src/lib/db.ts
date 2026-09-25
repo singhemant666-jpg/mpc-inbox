@@ -226,20 +226,20 @@ export function updateBroadcastStatus(data: {
       }
     }
 
-    // Fallback: update most recent log matching phone if message ID wasn't matched
+    // Fallback: update most recent pending/submitted/delivered log matching phone ONLY if message ID wasn't matched
     if (!updated && data.phone) {
       const cleanPhone = String(data.phone).replace(/\D/g, '');
-      // Derive alternate phone format: if starts with 91, strip it; else add 91
       const altPhone = cleanPhone.startsWith('91') ? cleanPhone.slice(2) : '91' + cleanPhone;
       const stmt = db.prepare(`
         UPDATE inbox_broadcast_logs
         SET status = ?, 
             error_message = COALESCE(?, error_message), 
-            gupshup_message_id = COALESCE(?, gupshup_message_id),
-            read_at = CASE WHEN ? = 'read' THEN COALESCE(?, read_at, CURRENT_TIMESTAMP) ELSE read_at END
+            gupshup_message_id = COALESCE(gupshup_message_id, ?),
+            read_at = CASE WHEN ? = 'read' THEN COALESCE(read_at, ?, CURRENT_TIMESTAMP) ELSE read_at END
         WHERE id = (
           SELECT id FROM inbox_broadcast_logs
           WHERE (phone = ? OR phone = ?)
+            AND (status != 'replied' AND reply_text IS NULL)
           ORDER BY created_at DESC
           LIMIT 1
         )
