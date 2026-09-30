@@ -295,12 +295,30 @@ export default function BroadcastPage() {
   const fetchHistory = async (silent = false) => {
     if (!silent) setLoadingHistory(true);
     try {
-      const res = await fetch('/api/broadcast/history?limit=100000', {
+      // Use lightweight limit during background sync to reduce bandwidth by 99%
+      const url = silent ? '/api/broadcast/history?limit=250' : '/api/broadcast/history?limit=10000';
+      const res = await fetch(url, {
         headers: { 'ngrok-skip-browser-warning': 'true' },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.logs)) {
+        if (silent) {
+          // Merge recent updates into existing logs in memory
+          setHistoryLogs((prev) => {
+            const map = new Map(prev.map((item) => [item.id, item]));
+            for (const item of data.logs) {
+              map.set(item.id, item);
+            }
+            return Array.from(map.values()).sort((a: any, b: any) => {
+              const tA = new Date(a.createdAt).getTime() || 0;
+              const tB = new Date(b.createdAt).getTime() || 0;
+              return tB - tA;
+            });
+          });
+          return;
+        }
+
         // Sort strictly by createdAt DESC so the latest broadcast campaign messages stay at the top
         const sorted = [...data.logs].sort((a: any, b: any) => {
           const tA = new Date(a.createdAt).getTime() || 0;
@@ -413,13 +431,28 @@ export default function BroadcastPage() {
     };
   }, [readSoundEnabled]);
 
-  // Real-time background sync every 3 seconds for updates
+  // Smart background sync: only run when tab is visible and active, spaced to 30 seconds
+  // Real-time updates are already handled instantly via WebSockets (broadcast_status) with zero bandwidth waste
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && activeTab === 'history') {
+        fetchHistory(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const interval = setInterval(() => {
-      fetchHistory(true);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+      if (document.visibilityState === 'visible' && activeTab === 'history') {
+        fetchHistory(true);
+      }
+    }, 30000); // 30s instead of 3s to reduce bandwidth by 90%+
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [activeTab]);
 
   // Auto-dismiss new read alert banner after 6 seconds
   useEffect(() => {
