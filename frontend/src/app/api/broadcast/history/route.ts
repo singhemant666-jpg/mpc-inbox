@@ -5,8 +5,8 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const limitParam = searchParams.get('limit');
-    const limit = limitParam ? parseInt(limitParam, 10) : 100000;
-    const logs = getBroadcastHistory(limit);
+    const limit = limitParam ? parseInt(limitParam, 10) : 500;
+    const logs = getBroadcastHistory(Math.min(limit, 10000));
 
     return NextResponse.json({
       success: true,
